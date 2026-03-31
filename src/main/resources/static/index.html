@@ -1,0 +1,1644 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Godot 像素立绘编辑台</title>
+    <script src="/webjars/vue/3.4.21/dist/vue.global.prod.js"></script>
+    <style>
+        :root {
+            --primary: #8b5cf6;
+            --primary-hover: #7c3aed;
+            --secondary: #3b82f6;
+            --bg-dark: #0f172a;
+            --bg-panel: #1e293b;
+            --bg-card: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #475569;
+            --success: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            padding: 20px;
+        }
+
+        .app {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 32px;
+            background: linear-gradient(to right, #8b5cf6, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        .step-section {
+            background-color: var(--bg-panel);
+            border-radius: 16px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            opacity: 0.5;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+
+        .step-section.active {
+            opacity: 1;
+            pointer-events: auto;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+
+        .step-header {
+            background-color: rgba(0,0,0,0.2);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background-color: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .step-header h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        .step-content {
+            padding: 24px;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed rgba(139, 92, 246, 0.3);
+            border-radius: 20px;
+            padding: 60px 40px;
+            text-align: center;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover {
+            background: rgba(139, 92, 246, 0.05);
+            border-color: var(--primary);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.4);
+        }
+
+        .upload-icon {
+            font-size: 64px;
+            line-height: 1;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+        }
+        
+        .upload-text {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--text-main);
+        }
+        
+        .upload-subtext {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .thumbnail-list {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+
+        .thumbnail {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid transparent;
+            cursor: pointer;
+            flex-shrink: 0;
+            background: var(--bg-card);
+        }
+
+        .thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .thumbnail.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+        }
+
+        button, .btn-primary, .btn-secondary, .btn-success, .btn-download {
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        button:hover, .btn-primary:hover, .btn-secondary:hover, .btn-success:hover, .btn-download:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+            opacity: 1;
+        }
+
+        button:active, .btn-primary:active, .btn-secondary:active, .btn-success:active, .btn-download:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .btn-primary { 
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%); 
+        }
+        
+        .btn-secondary { 
+            background-color: var(--bg-card); 
+            border: 1px solid var(--border); 
+            color: var(--text-main);
+        }
+        .btn-secondary:hover {
+            background-color: var(--border);
+            border-color: var(--text-muted);
+        }
+
+        .btn-success { 
+            background: linear-gradient(135deg, var(--success) 0%, #059669 100%); 
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            padding: 12px 24px;
+            font-size: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .btn-small { padding: 6px 12px; font-size: 14px; border-radius: 8px; }
+
+        .step-actions {
+            margin-top: 24px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        /* Split View */
+        .split-view {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .split-view { grid-template-columns: 1fr; }
+        }
+
+        .view-panel {
+            background-color: var(--bg-card);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .view-panel h3 {
+            margin: 0 0 12px 0;
+            font-size: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .canvas-container, .preview-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background-color: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            image-rendering: pixelated;
+        }
+
+        .overlay-canvas {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            /* Size will be managed by JS to match base canvas */
+        }
+
+        .preview-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            image-rendering: pixelated;
+        }
+
+        .checkered-bg {
+            background-image: 
+                linear-gradient(45deg, #2a3441 25%, transparent 25%), 
+                linear-gradient(-45deg, #2a3441 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #2a3441 75%), 
+                linear-gradient(-45deg, transparent 75%, #2a3441 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+        }
+
+        .placeholder-text {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background-color: rgba(0,0,0,0.2);
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1px;
+            background-color: var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            padding: 1px;
+        }
+
+        .btn-group .btn-secondary {
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+        }
+
+        .btn-group .btn-secondary:first-child { border-radius: 7px 0 0 7px; }
+        .btn-group .btn-secondary:last-child { border-radius: 0 7px 7px 0; }
+
+        .btn-group .btn-secondary.active {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .brush-size-control {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-grow: 1;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .brush-size-control input[type="range"] {
+            flex-grow: 1;
+            accent-color: var(--primary);
+        }
+
+        .toolbar label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        /* Export Settings */
+        .export-presets {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .preset-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: var(--text);
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 120px;
+        }
+
+        .preset-btn:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .preset-btn span:first-child {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #60a5fa;
+            margin-bottom: 4px;
+        }
+
+        .preset-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .lock-btn {
+            background: none;
+            border: none;
+            color: #60a5fa;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0 5px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .lock-btn:hover {
+            opacity: 1;
+        }
+
+        .lock-btn.unlocked {
+            opacity: 0.5;
+        }
+
+        .export-settings {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            background-color: var(--bg-card);
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .field input, .field select {
+            background-color: var(--bg-dark);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .result-area {
+            margin-top: 24px;
+            border-top: 1px solid var(--border);
+            padding-top: 24px;
+        }
+
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .result-item {
+            background-color: var(--bg-card);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        /* 放大预览弹窗 */
+        .preview-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            cursor: zoom-out;
+        }
+
+        .preview-modal img {
+            max-width: 90vw;
+            max-height: 90vh;
+            object-fit: contain;
+            /* 保证放大后依然保持像素的锐利感 */
+            image-rendering: pixelated;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            background-color: var(--surface);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .result-item img {
+            width: 100%;
+            height: 120px;
+            object-fit: contain;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            cursor: zoom-in;
+            transition: transform 0.2s;
+            /* 让缩略图也保持一定的像素感 */
+            image-rendering: pixelated;
+        }
+
+        .result-item img:hover {
+            transform: scale(1.05);
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            font-weight: bold;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+<div id="app" class="app">
+    <header class="header" style="position: relative; display: flex; justify-content: center; align-items: center; padding-bottom: 20px;">
+        <div style="text-align: center;">
+            <h1 style="margin: 0; font-size: 24px; color: var(--text-main);">Godot处理工具</h1>
+            <p style="margin: 8px 0 0; color: var(--text-muted); font-size: 14px;">专业级批量处理流水线：裁剪 -> 去水印 -> 抠图 -> 调整像素导出</p>
+        </div>
+        <div style="position: absolute; right: 0; top: 0; display: flex; align-items: center; gap: 8px;">
+            <label style="color: var(--text-muted); font-size: 14px;">界面背景:</label>
+            <select v-model="currentTheme" @change="applyTheme" style="padding: 6px; border-radius: 6px; background: var(--bg-panel); color: var(--text-main); border: 1px solid var(--border); outline: none;">
+                <option value="dark">默认暗色</option>
+                <option value="light">明亮色</option>
+                <option value="blue">深蓝色</option>
+                <option value="green">墨绿色</option>
+                <option value="purple">紫灰色</option>
+                <option value="pink">粉红色</option>
+            </select>
+        </div>
+    </header>
+
+    <!-- Step 1: Upload -->
+    <section class="step-section" :class="{ active: step >= 1 }">
+        <div class="step-header">
+            <div class="step-number">1</div>
+            <h2>上传图片</h2>
+        </div>
+        <div class="step-content">
+            <div class="upload-area" @click="$refs.fileInput.click()" @dragover.prevent @drop.prevent="handleDrop">
+                <input type="file" multiple accept="image/*" ref="fileInput" @change="handleFiles" style="display: none;">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">点击或拖拽图片到这里开始</div>
+                <div class="upload-subtext">支持 PNG, JPG, BMP 格式，建议上传同比例、同背景的系列图</div>
+            </div>
+            <div v-if="fileItems.length > 0">
+                <p style="margin-top: 20px;">已上传 {{fileItems.length}} 张图片。你可以点击切换图片进行独立预览和编辑。</p>
+                <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="applyToAll" v-model="applyToAll">
+                        <label for="applyToAll" style="color: var(--text-main); font-size: 14px; cursor: pointer;">将当前高亮图片的设置(裁剪、去水印、抠图点)统一应用到所有图片(适合相同机位的序列帧)</label>
+                    </div>
+                    <button class="btn-success btn-small" @click="enableAutoProcess" :disabled="autoProcessLoading">
+                        <span v-if="!autoProcessLoading">一键自动处理（去水印+去背景+像素）</span>
+                        <span v-else>自动处理中... {{autoProcessDone}}/{{fileItems.length}}</span>
+                    </button>
+                </div>
+                <div class="thumbnail-list">
+                    <div class="thumbnail" v-for="(item, index) in fileItems" :key="item.id" 
+                         :class="{ active: index === activeIndex }" @click="activateItem(index)">
+                        <img :src="item.preview?.finalUrl || item.src" alt="thumbnail">
+                    </div>
+                </div>
+                <div v-if="activeItem?.preview?.finalUrl" style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <strong style="font-size: 14px;">自动处理预览（当前：{{activeItem.name}}）</strong>
+                        <span style="color: var(--text-muted); font-size: 12px;">点击预览图可放大查看细节</span>
+                    </div>
+                    <div class="preview-container checkered-bg" style="max-width: 520px;">
+                        <div v-if="autoProcessLoading" class="loading-overlay">生成中...</div>
+                        <img :src="activeItem.preview.finalUrl" alt="自动处理预览" style="cursor: zoom-in;" @click="showPreview(activeItem.preview.finalUrl)">
+                    </div>
+                </div>
+                <div class="step-actions">
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+                        <button class="btn-primary" @click="nextStep(2)">手动修复/微调（裁剪→去水印→抠图→像素）</button>
+                        <button class="btn-success" v-if="autoProcessDone === fileItems.length && !autoProcessLoading" @click="downloadAutoProcessed" :disabled="loading">
+                            📥 批量下载一键处理结果
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 2: Crop -->
+    <section class="step-section" v-if="step >= 2" :class="{ active: step >= 2 }">
+        <div class="step-header">
+            <div class="step-number">2</div>
+            <h2>裁剪图片 <span v-if="activeItem" style="font-size: 14px; color: var(--text-muted); font-weight: normal; margin-left: 10px;">(当前正在编辑: {{ activeItem.name }})</span></h2>
+        </div>
+        <div class="step-content">
+            <div class="toolbar">
+                <label>在左侧原图中拖拽鼠标框选需要保留的区域。</label>
+                <button class="btn-secondary btn-small" @click="resetCrop">
+                    <span>🔄 重置裁剪</span>
+                </button>
+            </div>
+            <div class="split-view">
+                <div class="view-panel">
+                    <h3>原图框选</h3>
+                    <div class="canvas-container">
+                        <canvas ref="cropBaseCanvas"></canvas>
+                        <canvas ref="cropHelperCanvas" class="overlay-canvas"
+                                @mousedown="startCrop" @mousemove="moveCrop" @mouseup="endCrop" @mouseleave="endCrop"></canvas>
+                    </div>
+                </div>
+                <div class="view-panel">
+                    <h3>裁剪预览</h3>
+                    <div class="preview-container">
+                        <canvas ref="cropPreviewCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="step-actions">
+                <button class="btn-primary" @click="nextStep(3)">
+                    <span>✅ 确认裁剪，下一步：去水印</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 3: Brush / Watermark -->
+    <section class="step-section" v-if="step >= 3" :class="{ active: step >= 3 }">
+        <div class="step-header">
+            <div class="step-number">3</div>
+            <h2>去水印 / 杂点</h2>
+        </div>
+        <div class="step-content">
+            <div class="toolbar" style="flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; color: var(--text-main); cursor: pointer; background: rgba(139, 92, 246, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--primary);">
+                        <input type="checkbox" v-model="activeItem.localOptions.removeWatermark" @change="onWatermarkToggle" style="width: 18px; height: 18px;"> 
+                        启用自动去水印功能
+                    </label>
+                    <span style="color: var(--text-muted); font-size: 14px;">(不开启=不自动；仍会应用你手动涂抹的去水印/杂点效果)</span>
+                </div>
+                <div style="width: 100%; height: 1px; background: var(--border); margin: 10px 0;"></div>
+                <div class="btn-group">
+                    <button class="btn-secondary btn-small" :class="{ active: brushMode === 'brush' }" @click="brushMode = 'brush'">
+                        <span>🖌️ 画笔</span>
+                    </button>
+                    <button class="btn-secondary btn-small" :class="{ active: brushMode === 'erase' }" @click="brushMode = 'erase'">
+                        <span>🧽 橡皮擦</span>
+                    </button>
+                </div>
+                <div class="brush-size-control">
+                    <label>笔刷大小:</label>
+                    <input type="range" min="1" max="100" v-model.number="brushSize">
+                    <span>{{brushSize}}px</span>
+                </div>
+                <button class="btn-secondary btn-small" @click="clearBrush">
+                    <span>🗑️ 清空涂鸦</span>
+                </button>
+            </div>
+            <div class="split-view">
+                <div class="view-panel">
+                    <h3>涂抹区域</h3>
+                    <div class="canvas-container">
+                        <canvas ref="brushBaseCanvas"></canvas>
+                        <canvas ref="brushMaskCanvas" class="overlay-canvas"></canvas>
+                        <canvas ref="brushHelperCanvas" class="overlay-canvas"
+                                @mousedown="startBrush" @mousemove="moveBrush" @mouseup="endBrush" @mouseleave="endBrush"></canvas>
+                    </div>
+                </div>
+                <div class="view-panel">
+                    <h3>去水印预览</h3>
+                    <div class="preview-container checkered-bg">
+                        <div v-if="previewLoading" class="loading-overlay">生成中...</div>
+                        <img v-if="activeItem?.preview?.cleanedUrl" :src="activeItem.preview.cleanedUrl" alt="去水印预览">
+                        <div v-else class="placeholder-text">勾选自动去水印或在左侧涂抹后自动生成效果</div>
+                    </div>
+                </div>
+            </div>
+            <div class="step-actions">
+                <button class="btn-primary" @click="nextStep(4)">
+                    <span>✨ 确认去水印，下一步：抠图去背景</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 4: Background Removal -->
+    <section class="step-section" v-if="step >= 4" :class="{ active: step >= 4 }">
+        <div class="step-header">
+            <div class="step-number">4</div>
+            <h2>抠图去背景</h2>
+        </div>
+        <div class="step-content">
+            <div class="toolbar" style="flex-direction: column; align-items: flex-start; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; color: var(--text-main); cursor: pointer; background: rgba(139, 92, 246, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--primary);">
+                        <input type="checkbox" v-model="activeItem.localOptions.removeBackground" @change="onBackgroundToggle" style="width: 18px; height: 18px;"> 
+                        启用自动去背景功能
+                    </label>
+                    <span style="color: var(--text-muted); font-size: 14px;">(不开启=不自动；仍会应用你手动选点/多点的抠图效果)</span>
+                </div>
+                <div style="width: 100%; height: 1px; background: var(--border); margin: 5px 0;"></div>
+                <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                    <label>点击左侧图片中要作为透明背景的区域。按住鼠标中键或 Shift+左键 拖动可以平移画布。</label>
+                    <button :class="['btn-secondary', { active: multiPointMode }]" @click="multiPointMode = !multiPointMode" :style="{ padding: '6px 12px', fontSize: '13px', backgroundColor: multiPointMode ? '#22c55e' : '', borderColor: multiPointMode ? '#16a34a' : '', color: multiPointMode ? 'white' : '' }">
+                        {{ multiPointMode ? '多点模式 (已开启)' : '单点模式 (点击开启多点)' }}
+                    </button>
+                </div>
+                
+                <div class="sample-badge-row" v-if="activeItem?.samplePoints?.length > 0" :style="{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', width: '100%', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px' }">
+                    <div v-for="(pt, index) in activeItem.samplePoints" :key="index" style="display: flex; align-items: center; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; gap: 10px;">
+                        <span :style="{ backgroundColor: pt.color, width: '24px', height: '24px', borderRadius: '4px', display: 'inline-block', border: '1px solid rgba(255,255,255,0.2)' }"></span>
+                        <div style="display: flex; flex-direction: column; font-size: 12px; line-height: 1.2;">
+                            <strong style="color: white;">{{ (pt.color || '').toUpperCase() }}</strong>
+                            <span style="color: var(--text-muted);">位置: ({{ pt.x }}, {{ pt.y }})</span>
+                        </div>
+                        <button @click="removeSamplePoint(index)" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 0 4px; margin-left: 4px; font-size: 16px;">×</button>
+                    </div>
+                    <button class="btn-secondary" @click="clearSamplePoints" style="padding: 6px 12px; font-size: 12px; border-color: #ef4444; color: #ef4444;">清除全部</button>
+                </div>
+            </div>
+            <div class="split-view">
+                <div class="view-panel">
+                    <h3 style="margin-top: 0;">选择背景点 <small style="font-size: 12px; color: #8b9bb4; font-weight: normal;">鼠标滚轮缩放，中键拖动</small></h3>
+                    <div class="canvas-viewport" ref="bgViewport"
+                         style="position: relative; width: 100%; aspect-ratio: 1/1; overflow: hidden; background-color: #000; border-radius: 8px;"
+                         :style="{ cursor: isBgPanning ? 'grabbing' : (multiPointMode ? 'crosshair' : 'default') }"
+                         @wheel.prevent="handleBgWheel"
+                         @mousedown="startBgPan"
+                         @mousemove="moveBgPan"
+                         @mouseup="endBgPan"
+                         @mouseleave="endBgPan">
+                        <div class="canvas-transform-layer" :style="{ transform: `translate(${bgPanX}px, ${bgPanY}px) scale(${bgZoom})`, transformOrigin: '0 0', position: 'absolute', top: 0, left: 0, width: bgBaseWidth + 'px', height: bgBaseHeight + 'px' }">
+                            <canvas ref="bgBaseCanvas" style="width: 100%; height: 100%; display: block; image-rendering: pixelated;"></canvas>
+                            <canvas ref="bgHelperCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; image-rendering: pixelated;" @click="pickBackground"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="view-panel">
+                    <h3>抠图预览</h3>
+                    <div class="preview-container checkered-bg">
+                        <div v-if="previewLoading" class="loading-overlay">生成中...</div>
+                        <img v-if="activeItem?.preview?.transparentUrl" :src="activeItem.preview.transparentUrl" alt="透明背景预览">
+                        <div v-else class="placeholder-text">勾选自动去背景可自动生成；也可以直接在左侧点击背景点生成效果</div>
+                    </div>
+                </div>
+            </div>
+            <div class="step-actions">
+                <button class="btn-primary" @click="nextStep(5)">
+                    <span>✂️ 确认抠图，下一步：导出设置</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step 5: Export -->
+    <section class="step-section" v-if="step >= 5" :class="{ active: step >= 5 }">
+        <div class="step-header">
+            <div class="step-number">5</div>
+            <h2>最终导出</h2>
+        </div>
+        <div class="step-content">
+            <div class="toolbar" style="margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; color: var(--text-main); cursor: pointer; background: rgba(139, 92, 246, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--primary);">
+                        <input type="checkbox" v-model="activeItem.localOptions.resizeEnabled" @change="onResizeToggle" style="width: 18px; height: 18px;"> 
+                        启用自动调整像素功能
+                    </label>
+                    <span style="color: var(--text-muted); font-size: 14px;">(不开启=不调整尺寸导出；仍可先手动设置尺寸)</span>
+                </div>
+            </div>
+            
+            <div>
+                <!-- 预设尺寸按钮 -->
+                <div class="export-presets">
+                    <button class="preset-btn" :class="{ active: !activeItem.localOptions.resizeEnabled }" @click="applyPreset(null, null)">
+                        <span>原图尺寸</span>
+                        <span class="preset-desc">不更改像素，仅导出</span>
+                    </button>
+                    <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 16 && activeItem.localOptions.targetHeight === 16 }" @click="applyPreset(16, 16)">
+                        <span>16x16</span>
+                        <span class="preset-desc">小型道具/子弹</span>
+                    </button>
+                    <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 32 && activeItem.localOptions.targetHeight === 32 }" @click="applyPreset(32, 32)">
+                        <span>32x32</span>
+                        <span class="preset-desc">标准主角/小怪</span>
+                    </button>
+                    <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 380 && activeItem.localOptions.targetHeight === 243 }" @click="applyPreset(380, 243)">
+                        <span>380x243</span>
+                        <span class="preset-desc">高清主角</span>
+                    </button>
+                    <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 128 && activeItem.localOptions.targetHeight === 128 }" @click="applyPreset(128, 128)">
+                        <span>128x128</span>
+                        <span class="preset-desc">大型物件/立绘</span>
+                    </button>
+                </div>
+                
+                <div class="export-settings">
+                    <div class="field">
+                        <label>
+                            目标宽度（当前图片）
+                            <button class="lock-btn" :class="{ unlocked: !keepAspectRatio }" @click="toggleKeepAspect" title="锁定/解锁宽高比">
+                                {{ keepAspectRatio ? '🔒' : '🔓' }}
+                            </button>
+                        </label>
+                        <input type="number" min="8" max="2048" v-model.number="activeItem.localOptions.targetWidth" @input="onWidthChange">
+                    </div>
+                    <div class="field">
+                        <label>目标高度（当前图片）</label>
+                        <input type="number" min="8" max="2048" v-model.number="activeItem.localOptions.targetHeight" @input="onHeightChange">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="step-actions">
+                <button class="btn-success" @click="submitBatch" :disabled="loading" style="font-size: 18px; padding: 12px 40px; border-radius: 16px;">
+                    <span v-if="!loading">🚀 开始批量导出</span>
+                    <span v-else>⏳ 批量处理中，请稍候...</span>
+                </button>
+            </div>
+            
+            <div v-if="result.items.length > 0" class="result-area">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0;">导出结果 ({{result.items.length}} 张)</h3>
+                    <a class="btn-download" :href="result.downloadUrl">
+                        <span>📥 下载完整结果 ZIP</span>
+                    </a>
+                </div>
+                <div class="result-grid">
+                    <div class="result-item" v-for="item in result.items" :key="item.fileName">
+                        <img :src="item.finalUrl" alt="最终图" class="checkered-bg" @click="showPreview(item.finalUrl)">
+                        <p style="margin: 0; font-size: 12px; color: var(--text-muted); word-break: break-all;">{{item.fileName}}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 放大预览弹窗 -->
+    <div class="preview-modal" v-if="previewImageUrl" @click="closePreview">
+        <img :src="previewImageUrl" alt="放大预览" class="checkered-bg" @click.stop>
+    </div>
+</div>
+
+<script>
+    const { createApp } = Vue;
+
+    createApp({
+        data() {
+            return {
+                currentTheme: 'dark',
+                step: 1,
+                applyToAll: false,
+                fileItems: [],
+                activeIndex: 0,
+                
+                // Crop State
+                dragState: { drawing: false, startX: 0, startY: 0 },
+                
+                // Brush State
+                brushMode: 'brush',
+                brushSize: 20,
+                brushDrag: { drawing: false, lastX: 0, lastY: 0 },
+                
+                // Processing Options
+                options: {
+                    removeWatermark: false,
+                    removeBackground: false,
+                    extractMask: false,
+                    resizeEnabled: false,
+                    targetWidth: 380,
+                    targetHeight: 243,
+                    backgroundTolerance: 28,
+                    watermarkTolerance: 60,
+                    alphaThreshold: 10,
+                    watermarkCorner: 'AUTO'
+                },
+                keepAspectRatio: true,
+            previewImageUrl: null, // 用于控制放大预览弹窗
+            
+            // Background Selection State
+            multiPointMode: false,
+            bgZoom: 1,
+            bgPanX: 0,
+            bgPanY: 0,
+            isBgPanning: false,
+            lastBgMouseX: 0,
+            lastBgMouseY: 0,
+            bgBaseWidth: 400,
+            bgBaseHeight: 400,
+            
+            loading: false,
+                autoProcessLoading: false,
+                autoProcessDone: 0,
+                previewLoading: false,
+                previewInFlight: false,
+                previewPendingStep: null,
+                result: { jobId: '', downloadUrl: '', items: [] }
+            };
+        },
+        computed: {
+            activeItem() {
+                return this.fileItems[this.activeIndex];
+            },
+            cropAspectRatio() {
+                if (!this.activeItem || !this.activeItem.crop.height) return 1;
+                return this.activeItem.crop.width / this.activeItem.crop.height;
+            }
+        },
+        watch: {
+            activeIndex() {
+                this.$nextTick(async () => {
+                    if (this.step >= 2) this.initCropCanvas();
+                    if (this.step >= 3) await this.initBrushCanvas();
+                    if (this.step >= 4) await this.initBgCanvas();
+                });
+            },
+            multiPointMode(newVal) {
+                if (!newVal && this.activeItem && this.activeItem.samplePoints && this.activeItem.samplePoints.length > 1) {
+                    // When switching back to single point mode, keep only the last selected point
+                    this.activeItem.samplePoints = [this.activeItem.samplePoints[this.activeItem.samplePoints.length - 1]];
+                    this.renderBgHelper();
+                    this.refreshPreview(4);
+                }
+            }
+        },
+        mounted() {
+            // Apply default theme
+            this.applyTheme();
+        },
+        methods: {
+            async enableAutoProcess() {
+                if (!this.fileItems.length) return;
+                for (const item of this.fileItems) {
+                    if (!item.localOptions) {
+                        item.localOptions = this.createDefaultLocalOptions();
+                    }
+                    item.localOptions.removeWatermark = true;
+                    item.localOptions.removeBackground = true;
+                    item.localOptions.resizeEnabled = true;
+                    item.localOptions.targetWidth = 380;
+                    item.localOptions.targetHeight = 243;
+                }
+                await this.runAutoProcessForAll();
+            },
+            async runAutoProcessForAll() {
+                if (!this.fileItems.length) return;
+                this.autoProcessLoading = true;
+                this.autoProcessDone = 0;
+                const errors = [];
+
+                for (let i = 0; i < this.fileItems.length; i++) {
+                    const item = this.fileItems[i];
+                    try {
+                        const data = await this.previewOne(item, this.buildOptionsForItem(item));
+                        item.preview.cleanedUrl = data.cleanedUrl || '';
+                        item.preview.transparentUrl = data.transparentUrl || '';
+                        item.preview.finalUrl = data.finalUrl || '';
+                    } catch (e) {
+                        item.preview.cleanedUrl = '';
+                        item.preview.transparentUrl = '';
+                        item.preview.finalUrl = '';
+                        errors.push(item.name);
+                    } finally {
+                        this.autoProcessDone = i + 1;
+                    }
+                }
+
+                this.autoProcessLoading = false;
+                if (errors.length > 0) {
+                    alert(`以下图片自动处理失败：\n${errors.join('\n')}`);
+                }
+            },
+            async previewOne(item, options) {
+                const formData = new FormData();
+                formData.append('file', item.file);
+                formData.append('options', JSON.stringify(options));
+                formData.append('edit', JSON.stringify(this.buildEditPayload(item)));
+                const res = await fetch('/api/images/preview', { method: 'POST', body: formData });
+                if (!res.ok) throw new Error('预览生成失败');
+                return await res.json();
+            },
+            createDefaultLocalOptions() {
+                return {
+                    removeWatermark: false,
+                    removeBackground: false,
+                    resizeEnabled: false,
+                    targetWidth: 380,
+                    targetHeight: 243
+                };
+            },
+            buildOptionsForItem(item) {
+                const local = item && item.localOptions ? item.localOptions : this.createDefaultLocalOptions();
+                return { ...this.options, ...local };
+            },
+            async onWatermarkToggle() {
+                if (this.step < 3 || !this.activeItem) return;
+                const shouldPreview = this.activeItem.localOptions.removeWatermark || !!this.activeItem.eraseMaskDataUrl;
+                if (!shouldPreview) {
+                    this.activeItem.preview.cleanedUrl = '';
+                } else {
+                    await this.refreshPreview(3);
+                }
+                await this.initBrushCanvas();
+            },
+            async onBackgroundToggle() {
+                if (this.step < 4 || !this.activeItem) return;
+                const hasPoints = this.activeItem.samplePoints && this.activeItem.samplePoints.length > 0;
+                if (!this.activeItem.localOptions.removeBackground && !hasPoints) {
+                    this.activeItem.preview.transparentUrl = null;
+                    return;
+                }
+                await this.refreshPreview(4);
+            },
+            onResizeToggle() {
+                if (!this.activeItem) return;
+                if (this.activeItem.localOptions.resizeEnabled) {
+                    if (!this.activeItem.localOptions.targetWidth || !this.activeItem.localOptions.targetHeight) {
+                        this.activeItem.localOptions.targetWidth = 380;
+                        this.activeItem.localOptions.targetHeight = 243;
+                    }
+                }
+            },
+            applyTheme() {
+                const root = document.documentElement;
+                const themes = {
+                    dark: {
+                        '--bg-dark': '#0f172a',
+                        '--bg-panel': '#1e293b',
+                        '--bg-card': '#334155',
+                        '--text-main': '#f8fafc',
+                        '--text-muted': '#94a3b8',
+                        '--border': '#475569'
+                    },
+                    light: {
+                        '--bg-dark': '#f8fafc',
+                        '--bg-panel': '#ffffff',
+                        '--bg-card': '#f1f5f9',
+                        '--text-main': '#0f172a',
+                        '--text-muted': '#475569',
+                        '--border': '#cbd5e1'
+                    },
+                    blue: {
+                        '--bg-dark': '#0c2238',
+                        '--bg-panel': '#1a3654',
+                        '--bg-card': '#254b73',
+                        '--text-main': '#e0f2fe',
+                        '--text-muted': '#7dd3fc',
+                        '--border': '#38bdf8'
+                    },
+                    green: {
+                        '--bg-dark': '#064e3b',
+                        '--bg-panel': '#065f46',
+                        '--bg-card': '#047857',
+                        '--text-main': '#ecfdf5',
+                        '--text-muted': '#6ee7b7',
+                        '--border': '#34d399'
+                    },
+                    purple: {
+                        '--bg-dark': '#2e1065',
+                        '--bg-panel': '#4c1d95',
+                        '--bg-card': '#5b21b6',
+                        '--text-main': '#f5f3ff',
+                        '--text-muted': '#c4b5fd',
+                        '--border': '#8b5cf6'
+                    },
+                    pink: {
+                        '--bg-dark': '#831843',
+                        '--bg-panel': '#9d174d',
+                        '--bg-card': '#be185d',
+                        '--text-main': '#fdf2f8',
+                        '--text-muted': '#f9a8d4',
+                        '--border': '#f472b6'
+                    }
+                };
+                const selected = themes[this.currentTheme] || themes.dark;
+                for (const [key, value] of Object.entries(selected)) {
+                    root.style.setProperty(key, value);
+                }
+            },
+            applyPreset(w, h) {
+                if (w === null && h === null) {
+                    if (!this.activeItem || !this.activeItem.localOptions) return;
+                    this.activeItem.localOptions.resizeEnabled = false;
+                } else {
+                    this.keepAspectRatio = false;
+                    if (!this.activeItem || !this.activeItem.localOptions) return;
+                    this.activeItem.localOptions.targetWidth = w;
+                    this.activeItem.localOptions.targetHeight = h;
+                    this.activeItem.localOptions.resizeEnabled = true;
+                }
+            },
+            toggleKeepAspect() {
+                this.keepAspectRatio = !this.keepAspectRatio;
+                if (this.keepAspectRatio) {
+                    this.onWidthChange();
+                }
+            },
+            onWidthChange() {
+                if (!this.activeItem || !this.activeItem.localOptions) return;
+                if (this.keepAspectRatio && this.activeItem.localOptions.targetWidth) {
+                    this.activeItem.localOptions.targetHeight = Math.max(1, Math.round(this.activeItem.localOptions.targetWidth / this.cropAspectRatio));
+                }
+            },
+            onHeightChange() {
+                if (!this.activeItem || !this.activeItem.localOptions) return;
+                if (this.keepAspectRatio && this.activeItem.localOptions.targetHeight) {
+                    this.activeItem.localOptions.targetWidth = Math.max(1, Math.round(this.activeItem.localOptions.targetHeight * this.cropAspectRatio));
+                }
+            },
+            showPreview(url) {
+                this.previewImageUrl = url;
+            },
+            closePreview() {
+                this.previewImageUrl = null;
+            },
+            async handleFiles(event) {
+                const files = Array.from(event.target.files || []);
+                this.addFiles(files);
+            },
+            async handleDrop(event) {
+                const files = Array.from(event.dataTransfer.files || []);
+                this.addFiles(files);
+            },
+            async addFiles(files) {
+                const imageFiles = files.filter(f => f.type.startsWith('image/'));
+                if (imageFiles.length === 0) return;
+                
+                this.fileItems = [];
+                this.result = { jobId: '', downloadUrl: '', items: [] };
+                this.autoProcessLoading = false;
+                this.autoProcessDone = 0;
+                this.step = 1;
+                
+                for (let index = 0; index < imageFiles.length; index++) {
+                    const file = imageFiles[index];
+                    const src = await this.readFile(file);
+                    const image = await this.loadImage(src);
+                    this.fileItems.push({
+                        id: `${Date.now()}-${index}`,
+                        file, name: file.name, src, image,
+                        crop: { x: 0, y: 0, width: image.naturalWidth, height: image.naturalHeight },
+                        samplePoints: [],
+                        eraseMaskDataUrl: '',
+                        localOptions: this.createDefaultLocalOptions(),
+                        preview: { cleanedUrl: '', transparentUrl: '', finalUrl: '' }
+                    });
+                }
+                this.activeIndex = 0;
+            },
+            activateItem(index) {
+                this.activeIndex = index;
+            },
+            nextStep(targetStep) {
+                this.step = targetStep;
+                if (targetStep === 2) {
+                    this.$nextTick(() => { this.initCropCanvas(); });
+                } else if (targetStep === 3) {
+                    this.$nextTick(async () => { 
+                        if ((this.activeItem && this.activeItem.localOptions && this.activeItem.localOptions.removeWatermark) || (this.activeItem && this.activeItem.eraseMaskDataUrl)) {
+                            await this.refreshPreview(3);
+                        }
+                        await this.initBrushCanvas();
+                    });
+                } else if (targetStep === 4) {
+                    this.$nextTick(() => { this.initBgCanvas(); });
+                }
+                
+                // Smooth scroll to the new step section
+                this.$nextTick(() => {
+                    const sections = document.querySelectorAll('.step-section');
+                    if (sections && sections.length >= targetStep) {
+                        sections[targetStep - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            },
+            
+            // --- Canvas Utilities ---
+            setupCanvas(baseRef, helperRef, width, height) {
+                const base = this.$refs[baseRef];
+                const helper = this.$refs[helperRef];
+                base.width = width; base.height = height;
+                helper.width = width; helper.height = height;
+                
+                // Match visual size only for non-background canvases
+                if (baseRef !== 'bgBaseCanvas') {
+                    const rect = base.getBoundingClientRect();
+                    helper.style.width = rect.width + 'px';
+                    helper.style.height = rect.height + 'px';
+                } else {
+                    helper.style.width = '100%';
+                    helper.style.height = '100%';
+                }
+                return base.getContext('2d');
+            },
+            getCanvasPoint(event, canvasRef) {
+                const canvas = this.$refs[canvasRef];
+                if (!canvas) return {x: 0, y: 0};
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                return {
+                    x: Math.max(0, Math.min(canvas.width - 1, Math.round((event.clientX - rect.left) * scaleX))),
+                    y: Math.max(0, Math.min(canvas.height - 1, Math.round((event.clientY - rect.top) * scaleY)))
+                };
+            },
+
+            // --- Step 2: Crop ---
+            initCropCanvas() {
+                if (!this.activeItem) return;
+                const img = this.activeItem.image;
+                const ctx = this.setupCanvas('cropBaseCanvas', 'cropHelperCanvas', img.naturalWidth, img.naturalHeight);
+                ctx.drawImage(img, 0, 0);
+                this.renderCropHelper();
+                this.renderCropPreview();
+            },
+            renderCropHelper() {
+                const canvas = this.$refs.cropHelperCanvas;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                const {x, y, width, height} = this.activeItem.crop;
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(0, 0, canvas.width, y);
+                ctx.fillRect(0, y + height, canvas.width, canvas.height - y - height);
+                ctx.fillRect(0, y, x, height);
+                ctx.fillRect(x + width, y, canvas.width - x - width, height);
+                
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 6]);
+                ctx.strokeRect(x, y, width, height);
+                ctx.setLineDash([]);
+            },
+            renderCropPreview() {
+                const canvas = this.$refs.cropPreviewCanvas;
+                const {x, y, width, height} = this.activeItem.crop;
+                // Keep canvas size identical to original image for symmetric layout
+                canvas.width = this.activeItem.image.naturalWidth;
+                canvas.height = this.activeItem.image.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw a subtle background to indicate the image boundary
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw only the cropped region at its original position
+                ctx.drawImage(this.activeItem.image, x, y, width, height, x, y, width, height);
+                
+                // Add a border around the cropped region to make it clear
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, width, height);
+            },
+            startCrop(e) {
+                const pt = this.getCanvasPoint(e, 'cropHelperCanvas');
+                this.dragState = { drawing: true, startX: pt.x, startY: pt.y };
+            },
+            moveCrop(e) {
+                if (!this.dragState.drawing) return;
+                const pt = this.getCanvasPoint(e, 'cropHelperCanvas');
+                const startX = this.dragState.startX;
+                const startY = this.dragState.startY;
+                this.activeItem.crop = {
+                    x: Math.min(startX, pt.x),
+                    y: Math.min(startY, pt.y),
+                    width: Math.max(1, Math.abs(pt.x - startX)),
+                    height: Math.max(1, Math.abs(pt.y - startY))
+                };
+                this.renderCropHelper();
+                this.renderCropPreview(); // Real-time preview without earthquake!
+            },
+            endCrop() {
+                if(this.dragState.drawing) {
+                    this.dragState.drawing = false;
+                    this.renderCropPreview();
+                }
+            },
+            resetCrop() {
+                this.activeItem.crop = { x: 0, y: 0, width: this.activeItem.image.naturalWidth, height: this.activeItem.image.naturalHeight };
+                this.renderCropHelper();
+                this.renderCropPreview();
+            },
+
+            // --- Step 3: Brush ---
+            async initBrushCanvas() {
+                if (!this.activeItem) return;
+                const {width, height} = this.activeItem.crop;
+                const ctx = this.setupCanvas('brushBaseCanvas', 'brushHelperCanvas', width, height);
+                
+                const autoCleanedSrc = (this.activeItem.localOptions && this.activeItem.localOptions.removeWatermark) ? this.activeItem.preview.cleanedUrl : '';
+                if (autoCleanedSrc) {
+                    const img = await this.loadImage(autoCleanedSrc);
+                    ctx.drawImage(img, 0, 0, width, height);
+                } else {
+                    ctx.drawImage(this.activeItem.image, 
+                        this.activeItem.crop.x, this.activeItem.crop.y, width, height, 
+                        0, 0, width, height);
+                }
+                
+                // Setup mask canvas
+                const maskCanvas = this.$refs.brushMaskCanvas;
+                maskCanvas.width = width; maskCanvas.height = height;
+                const baseRect = this.$refs.brushBaseCanvas.getBoundingClientRect();
+                maskCanvas.style.width = baseRect.width + 'px';
+                maskCanvas.style.height = baseRect.height + 'px';
+                
+                const maskCtx = maskCanvas.getContext('2d');
+                maskCtx.clearRect(0, 0, width, height);
+                if (this.activeItem.eraseMaskDataUrl) {
+                    const maskImg = await this.loadImage(this.activeItem.eraseMaskDataUrl);
+                    maskCtx.drawImage(maskImg, 0, 0);
+                }
+            },
+            startBrush(e) {
+                const pt = this.getCanvasPoint(e, 'brushHelperCanvas');
+                this.brushDrag = { drawing: true, lastX: pt.x, lastY: pt.y };
+                this.paint(pt.x, pt.y, pt.x, pt.y);
+            },
+            moveBrush(e) {
+                if (!this.brushDrag.drawing) return;
+                const pt = this.getCanvasPoint(e, 'brushHelperCanvas');
+                this.paint(this.brushDrag.lastX, this.brushDrag.lastY, pt.x, pt.y);
+                this.brushDrag.lastX = pt.x;
+                this.brushDrag.lastY = pt.y;
+            },
+            endBrush() {
+                if (this.brushDrag.drawing) {
+                    this.brushDrag.drawing = false;
+                    this.activeItem.eraseMaskDataUrl = this.$refs.brushMaskCanvas.toDataURL('image/png');
+                    this.refreshPreview(3); // 自动触发去水印预览
+                }
+            },
+            paint(x1, y1, x2, y2) {
+                const ctx = this.$refs.brushMaskCanvas.getContext('2d');
+                ctx.save();
+                ctx.globalCompositeOperation = this.brushMode === 'erase' ? 'destination-out' : 'source-over';
+                ctx.strokeStyle = 'rgba(255, 82, 82, 0.7)';
+                ctx.fillStyle = 'rgba(255, 82, 82, 0.7)';
+                ctx.lineWidth = this.brushSize;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                ctx.restore();
+            },
+            clearBrush() {
+                const canvas = this.$refs.brushMaskCanvas;
+                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                this.activeItem.eraseMaskDataUrl = '';
+                this.refreshPreview(3); // 清空时也自动触发预览更新
+            },
+
+            // --- Step 4: Background ---
+            handleBgWheel(e) {
+                const viewport = this.$refs.bgViewport;
+                if (!viewport) return;
+                
+                const rect = viewport.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                let newZoom = this.bgZoom * delta;
+                newZoom = Math.max(0.1, Math.min(newZoom, 50)); // Allow wide zoom range
+                
+                // Calculate new pan to keep mouse pointing at the same image pixel
+                const imageX = (mouseX - this.bgPanX) / this.bgZoom;
+                const imageY = (mouseY - this.bgPanY) / this.bgZoom;
+
+                this.bgPanX = mouseX - imageX * newZoom;
+                this.bgPanY = mouseY - imageY * newZoom;
+                this.bgZoom = newZoom;
+                
+                this.renderBgHelper(); // Re-render to adjust target sizes based on zoom
+            },
+            startBgPan(e) {
+                // Middle click (1) or Shift+Left click
+                if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+                    e.preventDefault();
+                    this.isBgPanning = true;
+                    this.lastBgMouseX = e.clientX;
+                    this.lastBgMouseY = e.clientY;
+                }
+            },
+            moveBgPan(e) {
+                if (this.isBgPanning) {
+                    const dx = e.clientX - this.lastBgMouseX;
+                    const dy = e.clientY - this.lastBgMouseY;
+                    this.bgPanX += dx;
+                    this.bgPanY += dy;
+                    this.lastBgMouseX = e.clientX;
+                    this.lastBgMouseY = e.clientY;
+                }
+            },
+            endBgPan(e) {
+                this.isBgPanning = false;
+            },
+            async initBgCanvas() {
+                if (!this.activeItem) return;
+                const {width, height} = this.activeItem.crop;
+                
+                const container = this.$refs.bgViewport;
+                if (!container) return;
+                const cWidth = container.clientWidth || 400;
+                const cHeight = container.clientHeight || 400;
+                
+                // Fit image to viewport initially
+                const scale = Math.min(cWidth / width, cHeight / height, 1);
+                this.bgBaseWidth = width; // Base size is now actual pixel size
+                this.bgBaseHeight = height;
+                this.bgZoom = scale;
+                
+                // Center the image
+                this.bgPanX = (cWidth - (width * scale)) / 2;
+                this.bgPanY = (cHeight - (height * scale)) / 2;
+
+                const ctx = this.setupCanvas('bgBaseCanvas', 'bgHelperCanvas', width, height);
+                
+                // Show cleaned image if available, else cropped image
+                const srcToDraw = this.activeItem.preview.cleanedUrl || this.$refs.cropPreviewCanvas.toDataURL('image/png');
+                const img = await this.loadImage(srcToDraw);
+                ctx.drawImage(img, 0, 0, width, height);
+                this.renderBgHelper();
+            },
+            rgbToHex(r, g, b) {
+                return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1).toUpperCase();
+            },
+            pickBackground(e) {
+                if (this.isBgPanning || e.button !== 0 || e.shiftKey) return; // Ignore if panning or not left click
+
+                const pt = this.getCanvasPoint(e, 'bgHelperCanvas');
+                
+                // Get color at clicked point
+                const ctx = this.$refs.bgBaseCanvas.getContext('2d', { willReadFrequently: true });
+                const pixel = ctx.getImageData(pt.x, pt.y, 1, 1).data;
+                const colorStr = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+                const hexStr = this.rgbToHex(pixel[0], pixel[1], pixel[2]);
+
+                // The sample point should be relative to the original image to match backend logic!
+                const newPoint = {
+                    x: this.activeItem.crop.x + pt.x,
+                    y: this.activeItem.crop.y + pt.y,
+                    color: hexStr
+                };
+                
+                if (this.multiPointMode) {
+                    if (!this.activeItem.samplePoints) {
+                        this.activeItem.samplePoints = [];
+                    }
+                    this.activeItem.samplePoints.push(newPoint);
+                } else {
+                    this.activeItem.samplePoints = [newPoint];
+                }
+                
+                this.renderBgHelper();
+                this.refreshPreview(4);
+            },
+            removeSamplePoint(index) {
+                if (this.activeItem && this.activeItem.samplePoints) {
+                    this.activeItem.samplePoints.splice(index, 1);
+                    this.renderBgHelper();
+                    if (this.activeItem.samplePoints.length > 0) {
+                        this.refreshPreview(4);
+                    } else {
+                        this.activeItem.preview.transparentUrl = null;
+                    }
+                }
+            },
+            clearSamplePoints() {
+                if (this.activeItem) {
+                    this.activeItem.samplePoints = [];
+                    this.renderBgHelper();
+                    this.activeItem.preview.transparentUrl = null;
+                }
+            },
+            renderBgHelper() {
+                const canvas = this.$refs.bgHelperCanvas;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (this.activeItem.samplePoints && this.activeItem.samplePoints.length > 0) {
+                    // Adjust line width and sizes based on zoom so they stay visually constant
+                    const lineWidth = 2 / this.bgZoom;
+                    const outerRadius = 6 / this.bgZoom;
+                    const innerRadius = 1.5 / this.bgZoom;
+
+                    for (const pt of this.activeItem.samplePoints) {
+                        const relativeX = pt.x - this.activeItem.crop.x;
+                        const relativeY = pt.y - this.activeItem.crop.y;
+                        
+                        ctx.strokeStyle = '#ef4444'; // Red outer circle
+                        ctx.lineWidth = lineWidth;
+                        ctx.beginPath();
+                        ctx.arc(relativeX, relativeY, outerRadius, 0, Math.PI * 2);
+                        ctx.stroke();
+                        
+                        // draw a small inner dot
+                        ctx.fillStyle = '#ef4444';
+                        ctx.beginPath();
+                        ctx.arc(relativeX, relativeY, innerRadius, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            },
+
+            // --- Backend API ---
+            buildEditPayload(item) {
+                return {
+                    cropX: item.crop.x, cropY: item.crop.y,
+                    cropWidth: item.crop.width, cropHeight: item.crop.height,
+                    samplePoints: item.samplePoints || [],
+                    eraseMaskDataUrl: item.eraseMaskDataUrl || ''
+                };
+            },
+            async refreshPreview(stepNum) {
+                if (!this.activeItem) return;
+                if (this.previewInFlight) {
+                    this.previewPendingStep = stepNum;
+                    return;
+                }
+                this.previewInFlight = true;
+                this.previewLoading = true;
+                
+                // Prepare options based on step
+                let currentOptions = this.buildOptionsForItem(this.activeItem);
+                if (stepNum === 3) {
+                    currentOptions.removeBackground = false; // Don't do BG removal yet
+                    currentOptions.resizeEnabled = false; // Keep original size for preview
+                } else if (stepNum === 4) {
+                    currentOptions.resizeEnabled = false; // Keep original size for preview
+                    if (!currentOptions.removeBackground && this.activeItem && this.activeItem.samplePoints && this.activeItem.samplePoints.length > 0) {
+                        currentOptions.removeBackground = true;
+                    }
+                }
+                
+                const formData = new FormData();
+                formData.append('file', this.activeItem.file);
+                formData.append('options', JSON.stringify(currentOptions));
+                formData.append('edit', JSON.stringify(this.buildEditPayload(this.activeItem)));
+                
+                try {
+                    const res = await fetch('/api/images/preview', { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error('预览生成失败');
+                    const data = await res.json();
+                    
+                    if (stepNum === 3) {
+                        this.activeItem.preview.cleanedUrl = data.cleanedUrl;
+                    } else if (stepNum === 4) {
+                        this.activeItem.preview.transparentUrl = data.transparentUrl;
+                    }
+                } catch (e) {
+                    alert(e.message);
+                } finally {
+                    this.previewLoading = false;
+                    this.previewInFlight = false;
+                    const pending = this.previewPendingStep;
+                    this.previewPendingStep = null;
+                    if (pending != null) {
+                        await this.refreshPreview(pending);
+                    }
+                }
+            },
+            async submitBatch() {
+                if (!this.fileItems.length) return;
+                this.loading = true;
+                const formData = new FormData();
+                this.fileItems.forEach(item => formData.append('files', item.file));
+                formData.append('options', JSON.stringify(this.options));
+                formData.append('optionsList', JSON.stringify(this.fileItems.map(item => this.buildOptionsForItem(item))));
+                
+                let edits;
+                if (this.applyToAll) {
+                    // Apply the currently highlighted image's edit payload to ALL images
+                    const masterEdit = this.buildEditPayload(this.fileItems[this.activeIndex]);
+                    edits = this.fileItems.map(() => masterEdit);
+                } else {
+                    // Apply individual edits for each image
+                    edits = this.fileItems.map(item => this.buildEditPayload(item));
+                }
+                formData.append('edits', JSON.stringify(edits));
+                
+                try {
+                    const res = await fetch('/api/images/process', { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error('批量处理失败');
+                    this.result = await res.json();
+                    
+                    // Scroll to bottom
+                    this.$nextTick(() => {
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    });
+                } catch (e) {
+                    alert(e.message);
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async downloadAutoProcessed() {
+                this.nextStep(5);
+                await this.submitBatch();
+            },
+
+            // --- Common ---
+            readFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            },
+            loadImage(src) {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = reject;
+                    img.src = src;
+                });
+            }
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

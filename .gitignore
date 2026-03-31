@@ -1,0 +1,9 @@
+.idea/
+target/
+output/
+__pycache__/
+*.pyc
+*.log
+*.zip
+图片文件夹/
+视频文件夹/
