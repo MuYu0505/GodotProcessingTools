@@ -569,8 +569,9 @@
                 <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <input type="checkbox" id="applyToAll" v-model="applyToAll">
-                        <label for="applyToAll" style="color: var(--text-main); font-size: 14px; cursor: pointer;">将当前高亮图片的设置(裁剪、去水印、抠图点)统一应用到所有图片(适合相同机位的序列帧)</label>
+                        <label for="applyToAll" style="color: var(--text-main); font-size: 14px; cursor: pointer;">同步当前高亮图片的设置到所有图片（裁剪、去水印涂抹、抠图点；适合相同机位的序列帧）</label>
                     </div>
+                    <span style="color: var(--text-muted); font-size: 12px;">提示：先勾选做“整体粗修”，完成后取消勾选即可逐张“二次微调”再导出</span>
                     <button class="btn-success btn-small" @click="enableAutoProcess" :disabled="autoProcessLoading">
                         <span v-if="!autoProcessLoading">一键自动处理（去水印+去背景+像素）</span>
                         <span v-else>自动处理中... {{autoProcessDone}}/{{fileItems.length}}</span>
@@ -844,9 +845,10 @@
                     </a>
                 </div>
                 <div class="result-grid">
-                    <div class="result-item" v-for="item in result.items" :key="item.fileName">
+                    <div class="result-item" v-for="(item, index) in result.items" :key="item.fileName">
                         <img :src="item.finalUrl" alt="最终图" class="checkered-bg" @click="showPreview(item.finalUrl)">
                         <p style="margin: 0; font-size: 12px; color: var(--text-muted); word-break: break-all;">{{item.fileName}}</p>
+                        <button class="btn-secondary btn-small" style="margin-top: 8px;" @click="editFromResult(index)">二次微调这张</button>
                     </div>
                 </div>
             </div>
@@ -932,6 +934,11 @@
                     if (this.step >= 4) await this.initBgCanvas();
                 });
             },
+            applyToAll(newVal) {
+                if (newVal) {
+                    this.syncEditsFromActiveToAll();
+                }
+            },
             multiPointMode(newVal) {
                 if (!newVal && this.activeItem && this.activeItem.samplePoints && this.activeItem.samplePoints.length > 1) {
                     // When switching back to single point mode, keep only the last selected point
@@ -946,6 +953,35 @@
             this.applyTheme();
         },
         methods: {
+            syncEditsFromActiveToAll() {
+                if (!this.applyToAll) return;
+                if (!this.activeItem) return;
+                if (!this.fileItems || this.fileItems.length <= 1) return;
+
+                const baseCrop = { ...this.activeItem.crop };
+                const baseEraseMask = this.activeItem.eraseMaskDataUrl || '';
+                const baseSamplePoints = this.activeItem.samplePoints ? JSON.parse(JSON.stringify(this.activeItem.samplePoints)) : [];
+
+                for (let i = 0; i < this.fileItems.length; i++) {
+                    if (i === this.activeIndex) continue;
+                    const item = this.fileItems[i];
+                    item.crop = { ...baseCrop };
+                    item.eraseMaskDataUrl = baseEraseMask;
+                    item.samplePoints = baseSamplePoints ? JSON.parse(JSON.stringify(baseSamplePoints)) : [];
+
+                    if (item.preview) {
+                        item.preview.cleanedUrl = '';
+                        item.preview.transparentUrl = '';
+                    }
+                }
+            },
+            editFromResult(index) {
+                if (typeof index !== 'number') return;
+                if (!this.fileItems || index < 0 || index >= this.fileItems.length) return;
+                this.applyToAll = false;
+                this.activateItem(index);
+                this.nextStep(2);
+            },
             async enableAutoProcess() {
                 if (!this.fileItems.length) return;
                 for (const item of this.fileItems) {
@@ -1292,12 +1328,14 @@
                 if(this.dragState.drawing) {
                     this.dragState.drawing = false;
                     this.renderCropPreview();
+                    this.syncEditsFromActiveToAll();
                 }
             },
             resetCrop() {
                 this.activeItem.crop = { x: 0, y: 0, width: this.activeItem.image.naturalWidth, height: this.activeItem.image.naturalHeight };
                 this.renderCropHelper();
                 this.renderCropPreview();
+                this.syncEditsFromActiveToAll();
             },
 
             // --- Step 3: Brush ---
@@ -1346,6 +1384,7 @@
                 if (this.brushDrag.drawing) {
                     this.brushDrag.drawing = false;
                     this.activeItem.eraseMaskDataUrl = this.$refs.brushMaskCanvas.toDataURL('image/png');
+                    this.syncEditsFromActiveToAll();
                     this.refreshPreview(3); // 自动触发去水印预览
                 }
             },
@@ -1368,6 +1407,7 @@
                 const canvas = this.$refs.brushMaskCanvas;
                 canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
                 this.activeItem.eraseMaskDataUrl = '';
+                this.syncEditsFromActiveToAll();
                 this.refreshPreview(3); // 清空时也自动触发预览更新
             },
 
@@ -1474,12 +1514,14 @@
                 }
                 
                 this.renderBgHelper();
+                this.syncEditsFromActiveToAll();
                 this.refreshPreview(4);
             },
             removeSamplePoint(index) {
                 if (this.activeItem && this.activeItem.samplePoints) {
                     this.activeItem.samplePoints.splice(index, 1);
                     this.renderBgHelper();
+                    this.syncEditsFromActiveToAll();
                     if (this.activeItem.samplePoints.length > 0) {
                         this.refreshPreview(4);
                     } else {
@@ -1491,6 +1533,7 @@
                 if (this.activeItem) {
                     this.activeItem.samplePoints = [];
                     this.renderBgHelper();
+                    this.syncEditsFromActiveToAll();
                     this.activeItem.preview.transparentUrl = null;
                 }
             },
@@ -1589,15 +1632,7 @@
                 formData.append('options', JSON.stringify(this.options));
                 formData.append('optionsList', JSON.stringify(this.fileItems.map(item => this.buildOptionsForItem(item))));
                 
-                let edits;
-                if (this.applyToAll) {
-                    // Apply the currently highlighted image's edit payload to ALL images
-                    const masterEdit = this.buildEditPayload(this.fileItems[this.activeIndex]);
-                    edits = this.fileItems.map(() => masterEdit);
-                } else {
-                    // Apply individual edits for each image
-                    edits = this.fileItems.map(item => this.buildEditPayload(item));
-                }
+                const edits = this.fileItems.map(item => this.buildEditPayload(item));
                 formData.append('edits', JSON.stringify(edits));
                 
                 try {
