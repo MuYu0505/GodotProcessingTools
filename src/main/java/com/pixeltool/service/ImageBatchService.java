@@ -15,9 +15,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageTypeSpecifier;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.metadata.IIOMetadata;
+import javax.imageio.metadata.IIOMetadataNode;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.AlphaComposite;
+import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
-import java.io.File;
+import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,7 +35,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -323,6 +336,271 @@ public class ImageBatchService {
         return "/api/images/jobs/" + jobId + "/files/" + folder + "/" + fileName;
     }
 
+    public byte[] buildSpriteSheetPng(String jobId, int cols, int gap, String preset) throws IOException {
+        Path jobDir = jobPath(jobId);
+        if (!Files.exists(jobDir) || !Files.isDirectory(jobDir)) {
+            return null;
+        }
+        List<Path> frames = listJobPngFrames(jobDir);
+        if (frames.isEmpty()) {
+            return null;
+        }
+
+        int colsClamped = clamp(cols, 1, 50);
+        int gapClamped = clamp(gap, 0, 128);
+        int presetSize = parsePresetSize(preset);
+
+        int cellW;
+        int cellH;
+        if (presetSize > 0) {
+            cellW = presetSize;
+            cellH = presetSize;
+        } else {
+            int maxW = 1;
+            int maxH = 1;
+            for (Path p : frames) {
+                BufferedImage img = ImageIO.read(p.toFile());
+                if (img == null) continue;
+                maxW = Math.max(maxW, img.getWidth());
+                maxH = Math.max(maxH, img.getHeight());
+            }
+            cellW = maxW;
+            cellH = maxH;
+        }
+
+        int count = frames.size();
+        int rows = (int) Math.ceil(count / (double) colsClamped);
+        int sheetW = colsClamped * cellW + (colsClamped - 1) * gapClamped;
+        int sheetH = rows * cellH + (rows - 1) * gapClamped;
+
+        BufferedImage sheet = new BufferedImage(sheetW, sheetH, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = sheet.createGraphics();
+        g.setComposite(AlphaComposite.Src);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+        g.setRenderingHint(RenderingHints.KEY_ALPHA_INTERPOLATION, RenderingHints.VALUE_ALPHA_INTERPOLATION_SPEED);
+        try {
+            for (int i = 0; i < count; i++) {
+                Path p = frames.get(i);
+                BufferedImage img = ImageIO.read(p.toFile());
+                if (img == null) continue;
+                int col = i % colsClamped;
+                int row = i / colsClamped;
+                int x = col * (cellW + gapClamped);
+                int y = row * (cellH + gapClamped);
+                if (presetSize > 0) {
+                    int iw = img.getWidth();
+                    int ih = img.getHeight();
+                    double scale = Math.min(cellW / (double) iw, cellH / (double) ih);
+                    int dw = Math.max(1, (int) Math.round(iw * scale));
+                    int dh = Math.max(1, (int) Math.round(ih * scale));
+                    int ox = x + (cellW - dw) / 2;
+                    int oy = y + (cellH - dh) / 2;
+                    g.drawImage(img, 0, 0, iw, ih, ox, oy, dw, dh, null);
+                } else {
+                    int ox = x + (cellW - img.getWidth()) / 2;
+                    int oy = y + (cellH - img.getHeight()) / 2;
+                    g.drawImage(img, ox, oy, null);
+                }
+            }
+        } finally {
+            g.dispose();
+        }
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(sheet, "png", out);
+        return out.toByteArray();
+    }
+
+    public byte[] buildAnimatedGif(String jobId, int fps, String preset) throws IOException {
+        Path jobDir = jobPath(jobId);
+        if (!Files.exists(jobDir) || !Files.isDirectory(jobDir)) {
+            return null;
+        }
+        List<Path> frames = listJobPngFrames(jobDir);
+        if (frames.isEmpty()) {
+            return null;
+        }
+
+        int fpsClamped = clamp(fps, 1, 60);
+        int delayCs = Math.max(1, (int) Math.round(100.0 / fpsClamped));
+        int presetSize = parsePresetSize(preset);
+
+        int frameW;
+        int frameH;
+        if (presetSize > 0) {
+            frameW = presetSize;
+            frameH = presetSize;
+        } else {
+            int maxW = 1;
+            int maxH = 1;
+            for (Path p : frames) {
+                BufferedImage img = ImageIO.read(p.toFile());
+                if (img == null) continue;
+                maxW = Math.max(maxW, img.getWidth());
+                maxH = Math.max(maxH, img.getHeight());
+            }
+            frameW = maxW;
+            frameH = maxH;
+        }
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
+            GifSequenceWriter writer = new GifSequenceWriter(ios, BufferedImage.TYPE_INT_ARGB, delayCs, true);
+            for (Path p : frames) {
+                BufferedImage img = ImageIO.read(p.toFile());
+                if (img == null) continue;
+                BufferedImage frame = new BufferedImage(frameW, frameH, BufferedImage.TYPE_INT_ARGB);
+                Graphics2D g = frame.createGraphics();
+                g.setComposite(AlphaComposite.Src);
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+                g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+                g.setRenderingHint(RenderingHints.KEY_ALPHA_INTERPOLATION, RenderingHints.VALUE_ALPHA_INTERPOLATION_SPEED);
+                try {
+                    if (presetSize > 0) {
+                        int iw = img.getWidth();
+                        int ih = img.getHeight();
+                        double scale = Math.min(frameW / (double) iw, frameH / (double) ih);
+                        int dw = Math.max(1, (int) Math.round(iw * scale));
+                        int dh = Math.max(1, (int) Math.round(ih * scale));
+                        int ox = (frameW - dw) / 2;
+                        int oy = (frameH - dh) / 2;
+                        g.drawImage(img, 0, 0, iw, ih, ox, oy, dw, dh, null);
+                    } else {
+                        int ox = (frameW - img.getWidth()) / 2;
+                        int oy = (frameH - img.getHeight()) / 2;
+                        g.drawImage(img, ox, oy, null);
+                    }
+                } finally {
+                    g.dispose();
+                }
+                writer.writeToSequence(frame);
+            }
+            writer.close();
+        }
+        return out.toByteArray();
+    }
+
+    public byte[] buildSpineZip(String jobId, int cols, int gap, int fps, String preset) throws IOException {
+        Path jobDir = jobPath(jobId);
+        if (!Files.exists(jobDir) || !Files.isDirectory(jobDir)) {
+            return null;
+        }
+        List<Path> frames = listJobPngFrames(jobDir);
+        if (frames.isEmpty()) {
+            return null;
+        }
+
+        int colsClamped = clamp(cols, 1, 50);
+        int gapClamped = clamp(gap, 0, 128);
+        int fpsClamped = clamp(fps, 1, 60);
+        int presetSize = parsePresetSize(preset);
+
+        byte[] sheet = buildSpriteSheetPng(jobId, colsClamped, gapClamped, preset);
+        if (sheet == null || sheet.length == 0) {
+            return null;
+        }
+
+        int cellW;
+        int cellH;
+        if (presetSize > 0) {
+            cellW = presetSize;
+            cellH = presetSize;
+        } else {
+            int maxW = 1;
+            int maxH = 1;
+            for (Path p : frames) {
+                BufferedImage img = ImageIO.read(p.toFile());
+                if (img == null) continue;
+                maxW = Math.max(maxW, img.getWidth());
+                maxH = Math.max(maxH, img.getHeight());
+            }
+            cellW = maxW;
+            cellH = maxH;
+        }
+
+        int count = frames.size();
+        int rows = (int) Math.ceil(count / (double) colsClamped);
+        int sheetW = colsClamped * cellW + (colsClamped - 1) * gapClamped;
+        int sheetH = rows * cellH + (rows - 1) * gapClamped;
+
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("fps", fpsClamped);
+        meta.put("cols", colsClamped);
+        meta.put("gap", gapClamped);
+        meta.put("preset", preset == null ? "original" : preset);
+        Map<String, Object> sheetMeta = new LinkedHashMap<>();
+        sheetMeta.put("width", sheetW);
+        sheetMeta.put("height", sheetH);
+        sheetMeta.put("cellWidth", cellW);
+        sheetMeta.put("cellHeight", cellH);
+        meta.put("sheet", sheetMeta);
+        List<Map<String, Object>> frameList = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            int col = i % colsClamped;
+            int row = i / colsClamped;
+            int x = col * (cellW + gapClamped);
+            int y = row * (cellH + gapClamped);
+            Map<String, Object> f = new LinkedHashMap<>();
+            f.put("index", i);
+            f.put("name", frames.get(i).getFileName().toString());
+            f.put("x", x);
+            f.put("y", y);
+            f.put("w", cellW);
+            f.put("h", cellH);
+            frameList.add(f);
+        }
+        meta.put("frames", frameList);
+
+        byte[] metaJson = objectMapper.writeValueAsBytes(meta);
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(out)) {
+            ZipEntry sheetEntry = new ZipEntry("sheet.png");
+            zos.putNextEntry(sheetEntry);
+            zos.write(sheet);
+            zos.closeEntry();
+
+            ZipEntry metaEntry = new ZipEntry("meta.json");
+            zos.putNextEntry(metaEntry);
+            zos.write(metaJson);
+            zos.closeEntry();
+
+            for (Path p : frames) {
+                ZipEntry frameEntry = new ZipEntry("frames/" + p.getFileName().toString());
+                zos.putNextEntry(frameEntry);
+                zos.write(Files.readAllBytes(p));
+                zos.closeEntry();
+            }
+        }
+        return out.toByteArray();
+    }
+
+    private List<Path> listJobPngFrames(Path jobDir) throws IOException {
+        try (java.util.stream.Stream<Path> stream = Files.list(jobDir)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".png"))
+                    .sorted(Comparator.comparing(p -> p.getFileName().toString()))
+                    .collect(Collectors.toList());
+        }
+    }
+
+    private int parsePresetSize(String preset) {
+        if (preset == null) return -1;
+        String p = preset.trim();
+        if (p.isEmpty() || "original".equalsIgnoreCase(p)) return -1;
+        try {
+            int v = Integer.parseInt(p);
+            if (v <= 0) return -1;
+            return clamp(v, 1, 2048);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
     private Path jobPath(String jobId) {
         return safeResolve(storageRoot, storageRoot.resolve(jobId).normalize());
     }
@@ -341,5 +619,65 @@ public class ImageBatchService {
         private BufferedImage transparentImage;
         private BufferedImage maskImage;
         private BufferedImage finalImage;
+    }
+
+    private static class GifSequenceWriter {
+        private final ImageWriter gifWriter;
+        private final ImageWriteParam imageWriteParam;
+        private final IIOMetadata imageMetaData;
+        private final IIOMetadata streamMetaData;
+
+        GifSequenceWriter(ImageOutputStream outputStream, int imageType, int delayCs, boolean loop) throws IOException {
+            gifWriter = ImageIO.getImageWritersByFormatName("gif").next();
+            imageWriteParam = gifWriter.getDefaultWriteParam();
+            ImageTypeSpecifier imageTypeSpecifier = ImageTypeSpecifier.createFromBufferedImageType(imageType);
+            imageMetaData = gifWriter.getDefaultImageMetadata(imageTypeSpecifier, imageWriteParam);
+            streamMetaData = gifWriter.getDefaultStreamMetadata(imageWriteParam);
+
+            String metaFormatName = imageMetaData.getNativeMetadataFormatName();
+            IIOMetadataNode root = (IIOMetadataNode) imageMetaData.getAsTree(metaFormatName);
+            IIOMetadataNode gce = getNode(root, "GraphicControlExtension");
+            gce.setAttribute("disposalMethod", "none");
+            gce.setAttribute("userInputFlag", "FALSE");
+            gce.setAttribute("transparentColorFlag", "TRUE");
+            gce.setAttribute("delayTime", Integer.toString(delayCs));
+            gce.setAttribute("transparentColorIndex", "0");
+
+            imageMetaData.setFromTree(metaFormatName, root);
+
+            String streamFormatName = streamMetaData.getNativeMetadataFormatName();
+            IIOMetadataNode streamRoot = (IIOMetadataNode) streamMetaData.getAsTree(streamFormatName);
+            IIOMetadataNode appExtensions = getNode(streamRoot, "ApplicationExtensions");
+            IIOMetadataNode appNode = new IIOMetadataNode("ApplicationExtension");
+            appNode.setAttribute("applicationID", "NETSCAPE");
+            appNode.setAttribute("authenticationCode", "2.0");
+            int loopCount = loop ? 0 : 1;
+            appNode.setUserObject(new byte[]{0x1, (byte) (loopCount & 0xFF), (byte) ((loopCount >> 8) & 0xFF)});
+            appExtensions.appendChild(appNode);
+            streamMetaData.setFromTree(streamFormatName, streamRoot);
+
+            gifWriter.setOutput(outputStream);
+            gifWriter.prepareWriteSequence(streamMetaData);
+        }
+
+        void writeToSequence(BufferedImage img) throws IOException {
+            gifWriter.writeToSequence(new IIOImage(img, null, imageMetaData), imageWriteParam);
+        }
+
+        void close() throws IOException {
+            gifWriter.endWriteSequence();
+        }
+
+        private static IIOMetadataNode getNode(IIOMetadataNode rootNode, String nodeName) {
+            int nNodes = rootNode.getLength();
+            for (int i = 0; i < nNodes; i++) {
+                if (rootNode.item(i).getNodeName().equalsIgnoreCase(nodeName)) {
+                    return (IIOMetadataNode) rootNode.item(i);
+                }
+            }
+            IIOMetadataNode node = new IIOMetadataNode(nodeName);
+            rootNode.appendChild(node);
+            return node;
+        }
     }
 }

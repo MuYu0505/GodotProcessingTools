@@ -76,6 +76,51 @@ public class ImageController {
         return buildFileResponse(path, MediaType.APPLICATION_OCTET_STREAM, true);
     }
 
+    @GetMapping("/jobs/{jobId}/sheet")
+    public ResponseEntity<byte[]> sheet(@PathVariable String jobId,
+                                        @RequestParam(value = "cols", defaultValue = "4") int cols,
+                                        @RequestParam(value = "gap", defaultValue = "0") int gap,
+                                        @RequestParam(value = "preset", defaultValue = "original") String preset) throws IOException {
+        byte[] png = imageBatchService.buildSpriteSheetPng(jobId, cols, gap, preset);
+        if (png == null || png.length == 0) {
+            return ResponseEntity.notFound().build();
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.IMAGE_PNG);
+        headers.setContentDisposition(ContentDisposition.inline().filename("sequence.png").build());
+        return ResponseEntity.ok().headers(headers).body(png);
+    }
+
+    @GetMapping("/jobs/{jobId}/gif")
+    public ResponseEntity<byte[]> gif(@PathVariable String jobId,
+                                      @RequestParam(value = "fps", defaultValue = "12") int fps,
+                                      @RequestParam(value = "preset", defaultValue = "original") String preset) throws IOException {
+        byte[] gif = imageBatchService.buildAnimatedGif(jobId, fps, preset);
+        if (gif == null || gif.length == 0) {
+            return ResponseEntity.notFound().build();
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.valueOf("image/gif"));
+        headers.setContentDisposition(ContentDisposition.attachment().filename("preview.gif").build());
+        return ResponseEntity.ok().headers(headers).body(gif);
+    }
+
+    @GetMapping("/jobs/{jobId}/spineZip")
+    public ResponseEntity<byte[]> spineZip(@PathVariable String jobId,
+                                           @RequestParam(value = "cols", defaultValue = "4") int cols,
+                                           @RequestParam(value = "gap", defaultValue = "0") int gap,
+                                           @RequestParam(value = "fps", defaultValue = "12") int fps,
+                                           @RequestParam(value = "preset", defaultValue = "original") String preset) throws IOException {
+        byte[] zip = imageBatchService.buildSpineZip(jobId, cols, gap, fps, preset);
+        if (zip == null || zip.length == 0) {
+            return ResponseEntity.notFound().build();
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentDisposition(ContentDisposition.attachment().filename("spine.zip").build());
+        return ResponseEntity.ok().headers(headers).body(zip);
+    }
+
     private ResponseEntity<Resource> buildFileResponse(Path path, MediaType mediaType, boolean attachment) throws IOException {
         if (!Files.exists(path) || !Files.isRegularFile(path)) {
             return ResponseEntity.notFound().build();

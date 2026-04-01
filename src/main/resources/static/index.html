@@ -529,6 +529,188 @@
             font-weight: bold;
             border-radius: 8px;
         }
+
+        .mode-switch {
+            display: inline-flex;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .mode-btn {
+            padding: 10px 14px;
+            font-weight: 700;
+            color: var(--text-muted);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+        }
+
+        .mode-btn.is-active {
+            color: var(--text-main);
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.55) 0%, rgba(59, 130, 246, 0.45) 100%);
+        }
+
+        .video-setup-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 16px;
+        }
+
+        .video-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .video-card-head {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        .video-card-title {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .video-card-title strong {
+            font-size: 14px;
+        }
+
+        .video-card-title small {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .video-card-body {
+            padding: 16px;
+        }
+
+        .range-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .range-field span {
+            font-size: 13px;
+            color: var(--text-main);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .range-field small {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .range-field input[type="range"] {
+            width: 100%;
+        }
+
+        .metric-card {
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .metric-card span {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .metric-card strong {
+            font-size: 18px;
+        }
+
+        .segment-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .segment-pill {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .segment-pill span {
+            display: block;
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .segment-pill strong {
+            font-size: 14px;
+        }
+
+        .sequence-grid {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .sequence-preview {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px;
+        }
+
+        .sequence-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .sequence-canvas-wrap {
+            width: 100%;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .sequence-controls {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .download-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 8px;
+        }
     </style>
 </head>
 <body>
@@ -537,6 +719,12 @@
         <div style="text-align: center;">
             <h1 style="margin: 0; font-size: 24px; color: var(--text-main);">Godot处理工具</h1>
             <p style="margin: 8px 0 0; color: var(--text-muted); font-size: 14px;">专业级批量处理流水线：裁剪 -> 去水印 -> 抠图 -> 调整像素导出</p>
+            <div style="margin-top: 14px; display: flex; justify-content: center;">
+                <div class="mode-switch">
+                    <button type="button" class="mode-btn" :class="{ 'is-active': mode === 'image' }" @click="switchMode('image')">图片批量处理</button>
+                    <button type="button" class="mode-btn" :class="{ 'is-active': mode === 'video' }" @click="switchMode('video')">视频转序列帧表</button>
+                </div>
+            </div>
         </div>
         <div style="position: absolute; right: 0; top: 0; display: flex; align-items: center; gap: 8px;">
             <label style="color: var(--text-muted); font-size: 14px;">界面背景:</label>
@@ -555,50 +743,181 @@
     <section class="step-section" :class="{ active: step >= 1 }">
         <div class="step-header">
             <div class="step-number">1</div>
-            <h2>上传图片</h2>
+            <h2>{{ mode === 'image' ? '上传图片' : (videoStage === 'setup' ? '上传视频' : '已提取帧') }}</h2>
         </div>
         <div class="step-content">
-            <div class="upload-area" @click="$refs.fileInput.click()" @dragover.prevent @drop.prevent="handleDrop">
-                <input type="file" multiple accept="image/*" ref="fileInput" @change="handleFiles" style="display: none;">
-                <div class="upload-icon">📁</div>
-                <div class="upload-text">点击或拖拽图片到这里开始</div>
-                <div class="upload-subtext">支持 PNG, JPG, BMP 格式，建议上传同比例、同背景的系列图</div>
-            </div>
-            <div v-if="fileItems.length > 0">
-                <p style="margin-top: 20px;">已上传 {{fileItems.length}} 张图片。你可以点击切换图片进行独立预览和编辑。</p>
-                <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="applyToAll" v-model="applyToAll">
-                        <label for="applyToAll" style="color: var(--text-main); font-size: 14px; cursor: pointer;">同步当前高亮图片的设置到所有图片（裁剪、去水印涂抹、抠图点；适合相同机位的序列帧）</label>
-                    </div>
-                    <span style="color: var(--text-muted); font-size: 12px;">提示：先勾选做“整体粗修”，完成后取消勾选即可逐张“二次微调”再导出</span>
-                    <button class="btn-success btn-small" @click="enableAutoProcess" :disabled="autoProcessLoading">
-                        <span v-if="!autoProcessLoading">一键自动处理（去水印+去背景+像素）</span>
-                        <span v-else>自动处理中... {{autoProcessDone}}/{{fileItems.length}}</span>
-                    </button>
+            <div v-if="mode === 'image'">
+                <div class="upload-area" @click="$refs.fileInput.click()" @dragover.prevent @drop.prevent="handleDrop">
+                    <input type="file" multiple accept="image/*" ref="fileInput" @change="handleFiles" style="display: none;">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">点击或拖拽图片到这里开始</div>
+                    <div class="upload-subtext">支持 PNG, JPG, BMP 格式，建议上传同比例、同背景的系列图</div>
                 </div>
-                <div class="thumbnail-list">
-                    <div class="thumbnail" v-for="(item, index) in fileItems" :key="item.id" 
-                         :class="{ active: index === activeIndex }" @click="activateItem(index)">
-                        <img :src="item.preview?.finalUrl || item.src" alt="thumbnail">
-                    </div>
-                </div>
-                <div v-if="activeItem?.preview?.finalUrl" style="margin-top: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <strong style="font-size: 14px;">自动处理预览（当前：{{activeItem.name}}）</strong>
-                        <span style="color: var(--text-muted); font-size: 12px;">点击预览图可放大查看细节</span>
-                    </div>
-                    <div class="preview-container checkered-bg" style="max-width: 520px;">
-                        <div v-if="autoProcessLoading" class="loading-overlay">生成中...</div>
-                        <img :src="activeItem.preview.finalUrl" alt="自动处理预览" style="cursor: zoom-in;" @click="showPreview(activeItem.preview.finalUrl)">
-                    </div>
-                </div>
-                <div class="step-actions">
-                    <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
-                        <button class="btn-primary" @click="nextStep(2)">手动修复/微调（裁剪→去水印→抠图→像素）</button>
-                        <button class="btn-success" v-if="autoProcessDone === fileItems.length && !autoProcessLoading" @click="downloadAutoProcessed" :disabled="loading">
-                            📥 批量下载一键处理结果
+                <div v-if="fileItems.length > 0">
+                    <p style="margin-top: 20px;">已上传 {{fileItems.length}} 张图片。你可以点击切换图片进行独立预览和编辑。</p>
+                    <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="applyToAll" v-model="applyToAll">
+                            <label for="applyToAll" style="color: var(--text-main); font-size: 14px; cursor: pointer;">同步当前高亮图片的设置到所有图片（裁剪、去水印涂抹、抠图点；适合相同机位的序列帧）</label>
+                        </div>
+                        <span style="color: var(--text-muted); font-size: 12px;">提示：先勾选做“整体粗修”，完成后取消勾选即可逐张“二次微调”再导出</span>
+                        <button class="btn-success btn-small" @click="enableAutoProcess" :disabled="autoProcessLoading">
+                            <span v-if="!autoProcessLoading">一键自动处理（去水印+去背景+像素）</span>
+                            <span v-else>自动处理中... {{autoProcessDone}}/{{fileItems.length}}</span>
                         </button>
+                    </div>
+                    <div class="thumbnail-list">
+                        <div class="thumbnail" v-for="(item, index) in fileItems" :key="item.id"
+                             :class="{ active: index === activeIndex }" @click="activateItem(index)">
+                            <img :src="item.preview?.finalUrl || item.src" alt="thumbnail">
+                        </div>
+                    </div>
+                    <div v-if="activeItem?.preview?.finalUrl" style="margin-top: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <strong style="font-size: 14px;">自动处理预览（当前：{{activeItem.name}}）</strong>
+                            <span style="color: var(--text-muted); font-size: 12px;">点击预览图可放大查看细节</span>
+                        </div>
+                        <div class="preview-container checkered-bg" style="max-width: 520px;">
+                            <div v-if="autoProcessLoading" class="loading-overlay">生成中...</div>
+                            <img :src="activeItem.preview.finalUrl" alt="自动处理预览" style="cursor: zoom-in;" @click="showPreview(activeItem.preview.finalUrl)">
+                        </div>
+                    </div>
+                    <div class="step-actions">
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+                            <button class="btn-primary" @click="nextStep(2)">手动修复/微调（裁剪→去水印→抠图→像素）</button>
+                            <button class="btn-success" v-if="autoProcessDone === fileItems.length && !autoProcessLoading" @click="downloadAutoProcessed" :disabled="loading">
+                                📥 批量下载一键处理结果
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else>
+                <video ref="videoEl" style="display: none;" muted playsinline></video>
+                <div v-if="videoStage === 'setup'">
+                    <div class="upload-area" @click="$refs.videoInput.click()">
+                        <input type="file" accept="video/*" ref="videoInput" @change="handleVideoFile" style="display: none;">
+                        <div class="upload-icon">🎬</div>
+                        <div class="upload-text">点击选择本地视频开始生成</div>
+                        <div class="upload-subtext">抽帧在本机浏览器完成；后续抠图/去水印/像素导出沿用现有后端处理流程</div>
+                    </div>
+
+                    <div v-if="video.ready" style="margin-top: 18px;">
+                        <div class="video-setup-grid">
+                            <div class="video-card">
+                                <div class="video-card-head">
+                                    <div class="video-card-title">
+                                        <strong>2. 画面裁剪</strong>
+                                        <small>在参考画面上拖拽，直接选择要保留的区域</small>
+                                    </div>
+                                    <div style="display: flex; gap: 10px; align-items: center;">
+                                        <span style="color: var(--text-muted); font-size: 12px;">当前输出尺寸：{{ video.crop.width }} × {{ video.crop.height }}</span>
+                                        <button class="btn-secondary btn-small" type="button" @click="resetVideoCrop">重置裁剪</button>
+                                    </div>
+                                </div>
+                                <div class="video-card-body">
+                                    <div class="range-field" style="margin-bottom: 12px;">
+                                        <span>
+                                            <span>参考帧时间</span>
+                                            <strong style="font-size: 12px; color: var(--text-muted); font-weight: 600;">{{ formatTime(video.referenceTime) }} / {{ formatTime(video.duration) }}</strong>
+                                        </span>
+                                        <input type="range" min="0" :max="video.duration" step="0.01" v-model.number="video.referenceTime" @input="onVideoReferenceTimeChange">
+                                        <small>拖动时间轴切换参考帧，裁剪框会对所有抽帧生效</small>
+                                    </div>
+
+                                    <div class="split-view" style="margin-top: 0;">
+                                        <div class="view-panel">
+                                            <h3>鼠标框选裁剪</h3>
+                                            <div class="canvas-container">
+                                                <canvas ref="videoCropBaseCanvas"></canvas>
+                                                <canvas ref="videoCropHelperCanvas" class="overlay-canvas"
+                                                        @mousedown="startVideoCrop" @mousemove="moveVideoCrop" @mouseup="endVideoCrop" @mouseleave="endVideoCrop"></canvas>
+                                            </div>
+                                        </div>
+                                        <div class="view-panel">
+                                            <h3>裁剪预览</h3>
+                                            <div class="preview-container">
+                                                <canvas ref="videoCropPreviewCanvas"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="video-card">
+                                <div class="video-card-head">
+                                    <div class="video-card-title">
+                                        <strong>3. 提取帧</strong>
+                                        <small>先确认片段和每秒帧数，再提取参考帧开始取色。</small>
+                                    </div>
+                                    <span style="color: var(--text-muted); font-size: 12px;">{{ formatTime(video.segmentStart) }} - {{ formatTime(video.segmentEnd) }}</span>
+                                </div>
+                                <div class="video-card-body">
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                        <label class="field field-card">
+                                            <span>每秒提取帧数</span>
+                                            <input min="1" max="24" type="number" v-model.number="video.fps" @input="recalcVideoEstimate">
+                                        </label>
+                                        <div class="metric-card">
+                                            <span>预计结果</span>
+                                            <strong>{{ video.estimatedFrames }} 帧</strong>
+                                            <small style="color: var(--text-muted); font-size: 12px;">{{ formatDuration(video.segmentEnd - video.segmentStart) }} 片段</small>
+                                        </div>
+                                    </div>
+
+                                    <div style="margin-top: 12px;">
+                                        <div class="range-field">
+                                            <span><span>开始位置</span><strong style="font-size: 12px; color: var(--text-muted); font-weight: 600;">{{ formatTime(video.segmentStart) }}</strong></span>
+                                            <input type="range" min="0" :max="video.duration" step="0.01" v-model.number="video.segmentStart" @input="onVideoSegmentChange">
+                                        </div>
+                                        <div class="range-field" style="margin-top: 10px;">
+                                            <span><span>结束位置</span><strong style="font-size: 12px; color: var(--text-muted); font-weight: 600;">{{ formatTime(video.segmentEnd) }}</strong></span>
+                                            <input type="range" min="0" :max="video.duration" step="0.01" v-model.number="video.segmentEnd" @input="onVideoSegmentChange">
+                                        </div>
+
+                                        <div class="segment-row">
+                                            <div class="segment-pill">
+                                                <span>开始</span>
+                                                <strong>{{ formatTime(video.segmentStart) }}</strong>
+                                            </div>
+                                            <div class="segment-pill">
+                                                <span>结束</span>
+                                                <strong>{{ formatTime(video.segmentEnd) }}</strong>
+                                            </div>
+                                            <div class="segment-pill">
+                                                <span>片段长度</span>
+                                                <strong>{{ formatDuration(video.segmentEnd - video.segmentStart) }}</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="step-actions" style="margin-top: 16px;">
+                                        <button class="btn-primary" type="button" @click="extractVideoFrames" :disabled="video.extracting || !video.ready || video.estimatedFrames <= 0">
+                                            <span v-if="!video.extracting">提取帧</span>
+                                            <span v-else>提取中... {{ video.extractedFrames }}/{{ video.estimatedFrames }}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 14px; color: var(--text-muted); font-size: 12px;">
+                            提示：提取完成后，会进入“抠图预览结果”，你可以像处理图片一样点击背景取色，并批量生成透明序列图。
+                        </div>
+                    </div>
+                </div>
+
+                <div v-else>
+                    <p style="margin-top: 0;">已提取 {{ fileItems.length }} 帧。你可以继续像处理图片一样：去水印 → 抠图 → 像素导出。</p>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <button class="btn-secondary" type="button" @click="backToVideoSetup">返回视频设置</button>
+                        <button class="btn-primary" type="button" @click="nextStep(4)" :disabled="fileItems.length === 0">进入抠图预览</button>
+                    </div>
+                    <div class="thumbnail-list" v-if="fileItems.length > 0">
+                        <div class="thumbnail" v-for="(item, index) in fileItems" :key="item.id"
+                             :class="{ active: index === activeIndex }" @click="activateItem(index)">
+                            <img :src="item.src" alt="thumbnail">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -606,7 +925,7 @@
     </section>
 
     <!-- Step 2: Crop -->
-    <section class="step-section" v-if="step >= 2" :class="{ active: step >= 2 }">
+    <section class="step-section" v-if="mode === 'image' && step >= 2" :class="{ active: step >= 2 }">
         <div class="step-header">
             <div class="step-number">2</div>
             <h2>裁剪图片 <span v-if="activeItem" style="font-size: 14px; color: var(--text-muted); font-weight: normal; margin-left: 10px;">(当前正在编辑: {{ activeItem.name }})</span></h2>
@@ -643,7 +962,7 @@
     </section>
 
     <!-- Step 3: Brush / Watermark -->
-    <section class="step-section" v-if="step >= 3" :class="{ active: step >= 3 }">
+    <section class="step-section" v-if="mode === 'image' && step >= 3" :class="{ active: step >= 3 }">
         <div class="step-header">
             <div class="step-number">3</div>
             <h2>去水印 / 杂点</h2>
@@ -832,23 +1151,108 @@
             
             <div class="step-actions">
                 <button class="btn-success" @click="submitBatch" :disabled="loading" style="font-size: 18px; padding: 12px 40px; border-radius: 16px;">
-                    <span v-if="!loading">🚀 开始批量导出</span>
+                    <span v-if="!loading">{{ mode === 'video' ? '4. 生成序列图' : '🚀 开始批量导出' }}</span>
                     <span v-else>⏳ 批量处理中，请稍候...</span>
                 </button>
             </div>
             
             <div v-if="result.items.length > 0" class="result-area">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3 style="margin: 0;">导出结果 ({{result.items.length}} 张)</h3>
-                    <a class="btn-download" :href="result.downloadUrl">
-                        <span>📥 下载完整结果 ZIP</span>
-                    </a>
+                <div v-if="mode === 'image'">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0;">导出结果 ({{result.items.length}} 张)</h3>
+                        <a class="btn-download" :href="result.downloadUrl">
+                            <span>📥 下载完整结果 ZIP</span>
+                        </a>
+                    </div>
+                    <div class="result-grid">
+                        <div class="result-item" v-for="(item, index) in result.items" :key="item.fileName">
+                            <img :src="item.finalUrl" alt="最终图" class="checkered-bg" @click="showPreview(item.finalUrl)">
+                            <p style="margin: 0; font-size: 12px; color: var(--text-muted); word-break: break-all;">{{item.fileName}}</p>
+                            <button class="btn-secondary btn-small" style="margin-top: 8px;" @click="editFromResult(index)">二次微调这张</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="result-grid">
-                    <div class="result-item" v-for="(item, index) in result.items" :key="item.fileName">
-                        <img :src="item.finalUrl" alt="最终图" class="checkered-bg" @click="showPreview(item.finalUrl)">
-                        <p style="margin: 0; font-size: 12px; color: var(--text-muted); word-break: break-all;">{{item.fileName}}</p>
-                        <button class="btn-secondary btn-small" style="margin-top: 8px;" @click="editFromResult(index)">二次微调这张</button>
+
+                <div v-else>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap;">
+                        <h3 style="margin: 0;">序列图预览 ({{result.items.length}} 帧)</h3>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <span style="color: var(--text-muted); font-size: 12px;">修改导出参数会自动刷新预览</span>
+                        </div>
+                    </div>
+
+                    <div class="sequence-grid">
+                        <div class="sequence-preview">
+                            <div class="sequence-toolbar">
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <button class="btn-secondary btn-small" type="button" :disabled="sequence.view === 'sheet'" @click="setSequenceView('sheet')">序列图</button>
+                                    <button class="btn-secondary btn-small" type="button" :disabled="sequence.view === 'anim'" @click="setSequenceView('anim')">动画预览</button>
+                                </div>
+                                <div style="color: var(--text-muted); font-size: 12px;">
+                                    透明序列图 · {{ sequence.estimatedWidth }} × {{ sequence.estimatedHeight }}
+                                </div>
+                            </div>
+
+                            <div class="sequence-canvas-wrap" v-show="sequence.view === 'sheet'">
+                                <canvas ref="sequenceSheetCanvas" class="preview-canvas" style="width: 100%; height: auto;"></canvas>
+                            </div>
+
+                            <div v-show="sequence.view === 'anim'">
+                                <div class="sequence-canvas-wrap checkered-bg">
+                                    <canvas ref="sequenceAnimCanvas" class="preview-canvas" style="width: 100%; height: auto;"></canvas>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; flex-wrap: wrap;">
+                                    <div style="color: var(--text-muted); font-size: 12px;">
+                                        第 {{ sequence.animIndex + 1 }} / {{ result.items.length }} 帧 · {{ formatTime(sequence.animIndex / Math.max(1, sequence.fps)) }} · {{ sequence.fps }} FPS 预览
+                                    </div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button class="btn-secondary btn-small" type="button" @click="toggleSequenceAnim">{{ sequence.playing ? '暂停' : '播放' }}</button>
+                                        <button class="btn-secondary btn-small" type="button" @click="restartSequenceAnim">重播</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sequence-controls">
+                            <div style="color: var(--text-muted); font-size: 12px;">支持导出序列图 PNG、动画 GIF、透明帧 ZIP 和 Spine ZIP</div>
+
+                            <label class="field">
+                                <span>导出列数</span>
+                                <input min="1" max="20" type="number" v-model.number="sequence.cols" @input="scheduleSequenceRender">
+                            </label>
+                            <label class="field">
+                                <span>导出间距（精灵图建议 0）</span>
+                                <input min="0" max="64" type="number" v-model.number="sequence.gap" @input="scheduleSequenceRender">
+                            </label>
+                            <label class="field">
+                                <span>单帧尺寸预设</span>
+                                <select v-model="sequence.preset" @change="scheduleSequenceRender">
+                                    <option value="original">原始比例</option>
+                                    <option value="32">32 × 32</option>
+                                    <option value="64">64 × 64</option>
+                                    <option value="128">128 × 128</option>
+                                    <option value="256">256 × 256</option>
+                                </select>
+                            </label>
+
+                            <div class="metric-card">
+                                <span>预估导出尺寸</span>
+                                <strong>{{ sequence.estimatedWidth }} × {{ sequence.estimatedHeight }}</strong>
+                                <small style="color: var(--text-muted); font-size: 12px;">基于当前导出参数计算</small>
+                            </div>
+
+                            <div class="download-stack">
+                                <button class="btn-secondary" type="button" @click="openSpineEditor" :disabled="!result.jobId">进入 Spine 动画</button>
+                                <button class="btn-primary" type="button" @click="downloadSequencePng" :disabled="sequence.rendering || !result.items.length">下载透明序列图 PNG</button>
+                                <button class="btn-download" type="button" @click="downloadSequenceGif" :disabled="!result.jobId">下载动画 GIF</button>
+                                <a class="btn-success" :href="result.downloadUrl">下载透明单帧 ZIP</a>
+                                <button class="btn-secondary" type="button" @click="downloadSpineZip" :disabled="!result.jobId">下载 Spine ZIP</button>
+                            </div>
+
+                            <div style="margin-top: 6px; color: var(--text-muted); font-size: 12px;">
+                                提示：如果抠图边缘不干净，可以点“下载透明单帧 ZIP”前先在上方回到某一帧做二次微调。
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -868,6 +1272,8 @@
         data() {
             return {
                 currentTheme: 'dark',
+                mode: 'image',
+                videoStage: 'setup',
                 step: 1,
                 applyToAll: false,
                 fileItems: [],
@@ -875,6 +1281,39 @@
                 
                 // Crop State
                 dragState: { drawing: false, startX: 0, startY: 0 },
+                videoDragState: { drawing: false, startX: 0, startY: 0 },
+                video: {
+                    file: null,
+                    url: '',
+                    ready: false,
+                    duration: 0,
+                    videoWidth: 0,
+                    videoHeight: 0,
+                    referenceTime: 0,
+                    crop: { x: 0, y: 0, width: 0, height: 0 },
+                    fps: 12,
+                    segmentStart: 0,
+                    segmentEnd: 0,
+                    estimatedFrames: 0,
+                    extracting: false,
+                    extractedFrames: 0
+                },
+                sequence: {
+                    view: 'sheet',
+                    cols: 4,
+                    gap: 0,
+                    preset: 'original',
+                    fps: 12,
+                    playing: true,
+                    animIndex: 0,
+                    estimatedWidth: 0,
+                    estimatedHeight: 0,
+                    rendering: false,
+                    renderToken: 0,
+                    renderTimer: null,
+                    animTimer: null,
+                    imageCache: {}
+                },
                 
                 // Brush State
                 brushMode: 'brush',
@@ -929,8 +1368,8 @@
         watch: {
             activeIndex() {
                 this.$nextTick(async () => {
-                    if (this.step >= 2) this.initCropCanvas();
-                    if (this.step >= 3) await this.initBrushCanvas();
+                    if (this.mode === 'image' && this.step >= 2) this.initCropCanvas();
+                    if (this.mode === 'image' && this.step >= 3) await this.initBrushCanvas();
                     if (this.step >= 4) await this.initBgCanvas();
                 });
             },
@@ -1206,9 +1645,9 @@
             },
             nextStep(targetStep) {
                 this.step = targetStep;
-                if (targetStep === 2) {
+                if (this.mode === 'image' && targetStep === 2) {
                     this.$nextTick(() => { this.initCropCanvas(); });
-                } else if (targetStep === 3) {
+                } else if (this.mode === 'image' && targetStep === 3) {
                     this.$nextTick(async () => { 
                         if ((this.activeItem && this.activeItem.localOptions && this.activeItem.localOptions.removeWatermark) || (this.activeItem && this.activeItem.eraseMaskDataUrl)) {
                             await this.refreshPreview(3);
@@ -1477,10 +1916,23 @@
 
                 const ctx = this.setupCanvas('bgBaseCanvas', 'bgHelperCanvas', width, height);
                 
-                // Show cleaned image if available, else cropped image
-                const srcToDraw = this.activeItem.preview.cleanedUrl || this.$refs.cropPreviewCanvas.toDataURL('image/png');
-                const img = await this.loadImage(srcToDraw);
-                ctx.drawImage(img, 0, 0, width, height);
+                ctx.clearRect(0, 0, width, height);
+                if (this.activeItem.preview && this.activeItem.preview.cleanedUrl) {
+                    const img = await this.loadImage(this.activeItem.preview.cleanedUrl);
+                    ctx.drawImage(img, 0, 0, width, height);
+                } else if (this.activeItem.image) {
+                    ctx.drawImage(
+                        this.activeItem.image,
+                        this.activeItem.crop.x, this.activeItem.crop.y, width, height,
+                        0, 0, width, height
+                    );
+                } else if (this.$refs.cropPreviewCanvas) {
+                    const img = await this.loadImage(this.$refs.cropPreviewCanvas.toDataURL('image/png'));
+                    ctx.drawImage(img, 0, 0, width, height);
+                } else if (this.activeItem.src) {
+                    const img = await this.loadImage(this.activeItem.src);
+                    ctx.drawImage(img, 0, 0, width, height);
+                }
                 this.renderBgHelper();
             },
             rgbToHex(r, g, b) {
@@ -1639,6 +2091,17 @@
                     const res = await fetch('/api/images/process', { method: 'POST', body: formData });
                     if (!res.ok) throw new Error('批量处理失败');
                     this.result = await res.json();
+
+                    if (this.mode === 'video') {
+                        this.sequence.fps = this.video && this.video.fps ? this.video.fps : this.sequence.fps;
+                        this.sequence.animIndex = 0;
+                        this.sequence.playing = true;
+                        this.sequence.imageCache = {};
+                        this.$nextTick(() => {
+                            this.scheduleSequenceRender(true);
+                            this.startSequenceAnim();
+                        });
+                    }
                     
                     // Scroll to bottom
                     this.$nextTick(() => {
@@ -1653,6 +2116,607 @@
             async downloadAutoProcessed() {
                 this.nextStep(5);
                 await this.submitBatch();
+            },
+
+            switchMode(nextMode) {
+                if (nextMode !== 'image' && nextMode !== 'video') return;
+                if (this.mode === nextMode) return;
+                this.stopSequenceAnim();
+                this.sequence.view = 'sheet';
+                this.sequence.playing = true;
+                this.sequence.animIndex = 0;
+                this.sequence.imageCache = {};
+                this.mode = nextMode;
+                this.previewImageUrl = null;
+                this.applyToAll = false;
+                this.fileItems = [];
+                this.activeIndex = 0;
+                this.result = { jobId: '', downloadUrl: '', items: [] };
+                this.step = 1;
+                if (nextMode === 'video') {
+                    this.videoStage = 'setup';
+                    this.resetVideoState();
+                    this.options.removeBackground = true;
+                    this.options.removeWatermark = false;
+                    this.options.resizeEnabled = false;
+                } else {
+                    this.videoStage = 'setup';
+                    this.resetVideoState();
+                }
+            },
+
+            resetVideoState() {
+                if (this.video && this.video.url) {
+                    try { URL.revokeObjectURL(this.video.url); } catch (e) {}
+                }
+                this.video = {
+                    file: null,
+                    url: '',
+                    ready: false,
+                    duration: 0,
+                    videoWidth: 0,
+                    videoHeight: 0,
+                    referenceTime: 0,
+                    crop: { x: 0, y: 0, width: 0, height: 0 },
+                    fps: 12,
+                    segmentStart: 0,
+                    segmentEnd: 0,
+                    estimatedFrames: 0,
+                    extracting: false,
+                    extractedFrames: 0
+                };
+                const videoEl = this.$refs.videoEl;
+                if (videoEl) {
+                    try { videoEl.pause(); } catch (e) {}
+                    videoEl.removeAttribute('src');
+                    try { videoEl.load(); } catch (e) {}
+                }
+                this._videoOffscreenCanvas = null;
+                this._videoOffscreenCtx = null;
+                this._videoCaptureCanvas = null;
+                this._videoCaptureCtx = null;
+            },
+
+            backToVideoSetup() {
+                this.stopSequenceAnim();
+                this.sequence.view = 'sheet';
+                this.sequence.animIndex = 0;
+                this.sequence.playing = true;
+                this.sequence.imageCache = {};
+                this.result = { jobId: '', downloadUrl: '', items: [] };
+                this.fileItems = [];
+                this.activeIndex = 0;
+                this.step = 1;
+                this.videoStage = 'setup';
+                this.$nextTick(() => {
+                    if (this.video && this.video.ready) {
+                        this.initVideoCropCanvas();
+                    }
+                });
+            },
+
+            async handleVideoFile(e) {
+                const file = e && e.target ? e.target.files && e.target.files[0] : null;
+                if (!file) return;
+                this.stopSequenceAnim();
+                this.result = { jobId: '', downloadUrl: '', items: [] };
+                this.fileItems = [];
+                this.activeIndex = 0;
+                this.step = 1;
+                this.videoStage = 'setup';
+                if (this.video && this.video.url) {
+                    try { URL.revokeObjectURL(this.video.url); } catch (err) {}
+                }
+
+                const url = URL.createObjectURL(file);
+                this.video.file = file;
+                this.video.url = url;
+                this.video.ready = false;
+
+                const videoEl = this.$refs.videoEl;
+                if (!videoEl) return;
+
+                await new Promise((resolve, reject) => {
+                    const onLoaded = () => resolve();
+                    const onError = () => reject(new Error('视频加载失败'));
+                    videoEl.onloadedmetadata = onLoaded;
+                    videoEl.onerror = onError;
+                    videoEl.src = url;
+                    try { videoEl.load(); } catch (err) {}
+                });
+
+                this.video.duration = Number.isFinite(videoEl.duration) ? videoEl.duration : 0;
+                this.video.videoWidth = videoEl.videoWidth || 0;
+                this.video.videoHeight = videoEl.videoHeight || 0;
+                this.video.referenceTime = Math.min(0.2, Math.max(0, this.video.duration || 0));
+                this.video.segmentStart = 0;
+                this.video.segmentEnd = this.video.duration || 0;
+                this.video.fps = this.video.fps || 12;
+                this.video.crop = { x: 0, y: 0, width: this.video.videoWidth, height: this.video.videoHeight };
+                this.video.ready = true;
+                this.recalcVideoEstimate();
+
+                await this.drawVideoReferenceFrame();
+                this.$nextTick(() => {
+                    this.initVideoCropCanvas();
+                });
+            },
+
+            async onVideoReferenceTimeChange() {
+                if (!this.video || !this.video.ready) return;
+                await this.drawVideoReferenceFrame();
+                this.initVideoCropCanvas();
+            },
+
+            onVideoSegmentChange() {
+                if (!this.video || !this.video.ready) return;
+                if (this.video.segmentStart < 0) this.video.segmentStart = 0;
+                if (this.video.segmentEnd > this.video.duration) this.video.segmentEnd = this.video.duration;
+                if (this.video.segmentEnd < this.video.segmentStart) {
+                    const tmp = this.video.segmentEnd;
+                    this.video.segmentEnd = this.video.segmentStart;
+                    this.video.segmentStart = tmp;
+                }
+                this.recalcVideoEstimate();
+            },
+
+            recalcVideoEstimate() {
+                if (!this.video || !this.video.ready) {
+                    if (this.video) this.video.estimatedFrames = 0;
+                    return;
+                }
+                const fps = Math.max(1, Math.min(24, Math.floor(this.video.fps || 12)));
+                this.video.fps = fps;
+                const duration = Math.max(0, (this.video.segmentEnd || 0) - (this.video.segmentStart || 0));
+                if (duration <= 0) {
+                    this.video.estimatedFrames = 0;
+                    return;
+                }
+                const estimated = Math.floor(duration * fps) + 1;
+                this.video.estimatedFrames = Math.max(0, estimated);
+            },
+
+            ensureVideoOffscreen() {
+                const vw = this.video.videoWidth || 0;
+                const vh = this.video.videoHeight || 0;
+                if (!vw || !vh) return;
+                if (!this._videoOffscreenCanvas) {
+                    this._videoOffscreenCanvas = document.createElement('canvas');
+                    this._videoOffscreenCtx = this._videoOffscreenCanvas.getContext('2d');
+                }
+                if (this._videoOffscreenCanvas.width !== vw || this._videoOffscreenCanvas.height !== vh) {
+                    this._videoOffscreenCanvas.width = vw;
+                    this._videoOffscreenCanvas.height = vh;
+                }
+                if (!this._videoCaptureCanvas) {
+                    this._videoCaptureCanvas = document.createElement('canvas');
+                    this._videoCaptureCtx = this._videoCaptureCanvas.getContext('2d');
+                }
+            },
+
+            seekVideo(timeSec) {
+                const videoEl = this.$refs.videoEl;
+                if (!videoEl) return Promise.reject(new Error('视频未加载'));
+                const t = Math.max(0, Math.min(this.video.duration || 0, Number(timeSec || 0)));
+                return new Promise((resolve, reject) => {
+                    const onSeeked = () => resolve();
+                    const onError = () => reject(new Error('视频定位失败'));
+                    videoEl.onseeked = onSeeked;
+                    videoEl.onerror = onError;
+                    try { videoEl.currentTime = t; } catch (e) { reject(e); }
+                });
+            },
+
+            async drawVideoReferenceFrame() {
+                const videoEl = this.$refs.videoEl;
+                if (!videoEl || !this.video || !this.video.ready) return;
+                this.ensureVideoOffscreen();
+                await this.seekVideo(this.video.referenceTime);
+                this._videoOffscreenCtx.clearRect(0, 0, this._videoOffscreenCanvas.width, this._videoOffscreenCanvas.height);
+                this._videoOffscreenCtx.drawImage(videoEl, 0, 0, this._videoOffscreenCanvas.width, this._videoOffscreenCanvas.height);
+            },
+
+            initVideoCropCanvas() {
+                if (!this.video || !this.video.ready) return;
+                const vw = this.video.videoWidth;
+                const vh = this.video.videoHeight;
+                const base = this.$refs.videoCropBaseCanvas;
+                const helper = this.$refs.videoCropHelperCanvas;
+                if (!base || !helper) return;
+                base.width = vw;
+                base.height = vh;
+                helper.width = vw;
+                helper.height = vh;
+                const rect = base.getBoundingClientRect();
+                helper.style.width = rect.width + 'px';
+                helper.style.height = rect.height + 'px';
+
+                const ctx = base.getContext('2d');
+                ctx.clearRect(0, 0, vw, vh);
+                if (this._videoOffscreenCanvas) {
+                    ctx.drawImage(this._videoOffscreenCanvas, 0, 0);
+                }
+                this.renderVideoCropHelper();
+                this.renderVideoCropPreview();
+            },
+
+            renderVideoCropHelper() {
+                const canvas = this.$refs.videoCropHelperCanvas;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const { x, y, width, height } = this.video.crop;
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(0, 0, canvas.width, y);
+                ctx.fillRect(0, y + height, canvas.width, canvas.height - y - height);
+                ctx.fillRect(0, y, x, height);
+                ctx.fillRect(x + width, y, canvas.width - x - width, height);
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6, 6]);
+                ctx.strokeRect(x, y, width, height);
+                ctx.setLineDash([]);
+            },
+
+            renderVideoCropPreview() {
+                const canvas = this.$refs.videoCropPreviewCanvas;
+                if (!canvas) return;
+                const { x, y, width, height } = this.video.crop;
+                canvas.width = this.video.videoWidth;
+                canvas.height = this.video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                const src = this._videoOffscreenCanvas;
+                if (src) {
+                    ctx.drawImage(src, x, y, width, height, x, y, width, height);
+                }
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, width, height);
+            },
+
+            startVideoCrop(e) {
+                const pt = this.getCanvasPoint(e, 'videoCropHelperCanvas');
+                this.videoDragState = { drawing: true, startX: pt.x, startY: pt.y };
+            },
+
+            moveVideoCrop(e) {
+                if (!this.videoDragState.drawing) return;
+                const pt = this.getCanvasPoint(e, 'videoCropHelperCanvas');
+                const startX = this.videoDragState.startX;
+                const startY = this.videoDragState.startY;
+                const x = Math.min(startX, pt.x);
+                const y = Math.min(startY, pt.y);
+                const width = Math.max(1, Math.abs(pt.x - startX));
+                const height = Math.max(1, Math.abs(pt.y - startY));
+                this.video.crop = { x, y, width, height };
+                this.renderVideoCropHelper();
+                this.renderVideoCropPreview();
+                this.recalcVideoEstimate();
+            },
+
+            endVideoCrop() {
+                if (this.videoDragState.drawing) {
+                    this.videoDragState.drawing = false;
+                    this.renderVideoCropPreview();
+                }
+            },
+
+            resetVideoCrop() {
+                if (!this.video || !this.video.ready) return;
+                this.video.crop = { x: 0, y: 0, width: this.video.videoWidth, height: this.video.videoHeight };
+                this.renderVideoCropHelper();
+                this.renderVideoCropPreview();
+            },
+
+            async extractVideoFrames() {
+                if (!this.video || !this.video.ready) return;
+                if (this.video.extracting) return;
+                const duration = Math.max(0, (this.video.segmentEnd || 0) - (this.video.segmentStart || 0));
+                if (duration <= 0) return;
+                const fps = Math.max(1, Math.min(24, Math.floor(this.video.fps || 12)));
+                this.video.fps = fps;
+                this.recalcVideoEstimate();
+                if (this.video.estimatedFrames <= 0) return;
+
+                const videoEl = this.$refs.videoEl;
+                this.ensureVideoOffscreen();
+
+                this.video.extracting = true;
+                this.video.extractedFrames = 0;
+                this.fileItems = [];
+                this.activeIndex = 0;
+                this.result = { jobId: '', downloadUrl: '', items: [] };
+
+                const crop = { ...this.video.crop };
+                const frames = [];
+                const start = this.video.segmentStart || 0;
+                const end = this.video.segmentEnd || 0;
+                const maxCount = this.video.estimatedFrames;
+
+                for (let i = 0; i < maxCount; i++) {
+                    const t = start + i / fps;
+                    if (t > end + 0.0001) break;
+                    await this.seekVideo(t);
+                    this._videoOffscreenCtx.clearRect(0, 0, this._videoOffscreenCanvas.width, this._videoOffscreenCanvas.height);
+                    this._videoOffscreenCtx.drawImage(videoEl, 0, 0, this._videoOffscreenCanvas.width, this._videoOffscreenCanvas.height);
+
+                    this._videoCaptureCanvas.width = crop.width;
+                    this._videoCaptureCanvas.height = crop.height;
+                    this._videoCaptureCtx.clearRect(0, 0, crop.width, crop.height);
+                    this._videoCaptureCtx.drawImage(this._videoOffscreenCanvas, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+
+                    const blob = await new Promise(resolve => this._videoCaptureCanvas.toBlob(resolve, 'image/png'));
+                    if (!blob) continue;
+
+                    const indexName = String(i + 1).padStart(5, '0');
+                    const fileName = `frame_${indexName}.png`;
+                    const file = new File([blob], fileName, { type: 'image/png' });
+                    const src = URL.createObjectURL(blob);
+                    const image = await this.loadImage(src);
+
+                    const item = {
+                        id: `${Date.now()}-${i}`,
+                        file,
+                        name: fileName,
+                        src,
+                        image,
+                        crop: { x: 0, y: 0, width: image.naturalWidth, height: image.naturalHeight },
+                        samplePoints: [],
+                        eraseMaskDataUrl: '',
+                        localOptions: this.createDefaultLocalOptions(),
+                        preview: { cleanedUrl: '', transparentUrl: '', finalUrl: '' }
+                    };
+                    item.localOptions.removeBackground = true;
+                    frames.push(item);
+                    this.video.extractedFrames = frames.length;
+                    if (i % 5 === 0) {
+                        await new Promise(r => setTimeout(r, 0));
+                    }
+                }
+
+                this.fileItems = frames;
+                this.activeIndex = 0;
+                this.applyToAll = true;
+                this.videoStage = 'frames';
+                this.video.extracting = false;
+                this.nextStep(4);
+            },
+
+            setSequenceView(view) {
+                if (view !== 'sheet' && view !== 'anim') return;
+                this.sequence.view = view;
+                if (view === 'anim') {
+                    this.startSequenceAnim();
+                }
+            },
+
+            toggleSequenceAnim() {
+                this.sequence.playing = !this.sequence.playing;
+                if (this.sequence.playing) {
+                    this.startSequenceAnim();
+                } else {
+                    this.stopSequenceAnim();
+                    this.renderSequenceAnimFrame();
+                }
+            },
+
+            restartSequenceAnim() {
+                this.sequence.animIndex = 0;
+                this.sequence.playing = true;
+                this.startSequenceAnim();
+            },
+
+            startSequenceAnim() {
+                this.stopSequenceAnim();
+                if (!this.result || !this.result.items || this.result.items.length === 0) return;
+                if (!this.sequence.playing) return;
+                const fps = Math.max(1, Math.min(60, Math.floor(this.sequence.fps || 12)));
+                this.sequence.fps = fps;
+                const interval = Math.max(10, Math.floor(1000 / fps));
+                this.sequence.animTimer = setInterval(() => {
+                    if (!this.sequence.playing) return;
+                    const total = this.result.items.length;
+                    if (total <= 0) return;
+                    this.sequence.animIndex = (this.sequence.animIndex + 1) % total;
+                    this.renderSequenceAnimFrame();
+                }, interval);
+                this.$nextTick(() => this.renderSequenceAnimFrame());
+            },
+
+            stopSequenceAnim() {
+                if (this.sequence && this.sequence.animTimer) {
+                    clearInterval(this.sequence.animTimer);
+                    this.sequence.animTimer = null;
+                }
+            },
+
+            scheduleSequenceRender(immediate) {
+                if (this.sequence.renderTimer) {
+                    clearTimeout(this.sequence.renderTimer);
+                    this.sequence.renderTimer = null;
+                }
+                if (immediate) {
+                    this.renderSequenceSheet();
+                    return;
+                }
+                this.sequence.renderTimer = setTimeout(() => {
+                    this.sequence.renderTimer = null;
+                    this.renderSequenceSheet();
+                }, 120);
+            },
+
+            async getCachedResultImage(url) {
+                if (!url) return null;
+                if (this.sequence.imageCache && this.sequence.imageCache[url]) return this.sequence.imageCache[url];
+                const img = await this.loadImage(url);
+                if (!this.sequence.imageCache) this.sequence.imageCache = {};
+                this.sequence.imageCache[url] = img;
+                return img;
+            },
+
+            async resolveSequenceCellSize() {
+                const preset = this.sequence.preset;
+                if (preset && preset !== 'original') {
+                    const size = Math.max(1, parseInt(preset, 10));
+                    return { cellW: size, cellH: size };
+                }
+                if (!this.result || !this.result.items || this.result.items.length === 0) {
+                    return { cellW: 1, cellH: 1 };
+                }
+                const firstUrl = this.result.items[0].finalUrl;
+                const img = await this.getCachedResultImage(firstUrl);
+                if (!img) return { cellW: 1, cellH: 1 };
+                return { cellW: img.naturalWidth || img.width || 1, cellH: img.naturalHeight || img.height || 1 };
+            },
+
+            async renderSequenceSheet() {
+                if (!this.result || !this.result.items || this.result.items.length === 0) return;
+                const canvas = this.$refs.sequenceSheetCanvas;
+                if (!canvas) return;
+
+                this.sequence.rendering = true;
+                const token = ++this.sequence.renderToken;
+                try {
+                    const total = this.result.items.length;
+                    const cols = Math.max(1, Math.min(50, Math.floor(this.sequence.cols || 4)));
+                    const gap = Math.max(0, Math.min(128, Math.floor(this.sequence.gap || 0)));
+                    this.sequence.cols = cols;
+                    this.sequence.gap = gap;
+
+                    const { cellW, cellH } = await this.resolveSequenceCellSize();
+                    const rows = Math.ceil(total / cols);
+                    const width = cols * cellW + (cols - 1) * gap;
+                    const height = rows * cellH + (rows - 1) * gap;
+                    this.sequence.estimatedWidth = width;
+                    this.sequence.estimatedHeight = height;
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.imageSmoothingEnabled = false;
+
+                    for (let i = 0; i < total; i++) {
+                        if (token !== this.sequence.renderToken) return;
+                        const item = this.result.items[i];
+                        const img = await this.getCachedResultImage(item.finalUrl);
+                        if (!img) continue;
+                        const col = i % cols;
+                        const row = Math.floor(i / cols);
+                        const x = col * (cellW + gap);
+                        const y = row * (cellH + gap);
+
+                        const preset = this.sequence.preset;
+                        if (preset && preset !== 'original') {
+                            const scale = Math.min(cellW / img.naturalWidth, cellH / img.naturalHeight);
+                            const dw = Math.max(1, Math.round(img.naturalWidth * scale));
+                            const dh = Math.max(1, Math.round(img.naturalHeight * scale));
+                            const ox = x + Math.floor((cellW - dw) / 2);
+                            const oy = y + Math.floor((cellH - dh) / 2);
+                            ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, ox, oy, dw, dh);
+                        } else {
+                            ctx.drawImage(img, x, y);
+                        }
+                    }
+
+                    if (this.sequence.view === 'anim') {
+                        this.renderSequenceAnimFrame();
+                    }
+                } finally {
+                    if (token === this.sequence.renderToken) {
+                        this.sequence.rendering = false;
+                    }
+                }
+            },
+
+            async renderSequenceAnimFrame() {
+                if (!this.result || !this.result.items || this.result.items.length === 0) return;
+                const canvas = this.$refs.sequenceAnimCanvas;
+                if (!canvas) return;
+                const index = Math.max(0, Math.min(this.result.items.length - 1, this.sequence.animIndex || 0));
+                const url = this.result.items[index].finalUrl;
+                const img = await this.getCachedResultImage(url);
+                if (!img) return;
+                const w = img.naturalWidth || img.width || 1;
+                const h = img.naturalHeight || img.height || 1;
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, w, h);
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, 0, 0);
+            },
+
+            async downloadSequencePng() {
+                const canvas = this.$refs.sequenceSheetCanvas;
+                if (!canvas) return;
+                this.scheduleSequenceRender(true);
+                await new Promise(r => setTimeout(r, 0));
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `sequence_${this.sequence.cols}x_gap${this.sequence.gap}_${this.sequence.preset}.png`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => {
+                    try { URL.revokeObjectURL(url); } catch (e) {}
+                }, 1000);
+            },
+
+            downloadSequenceGif() {
+                if (!this.result || !this.result.jobId) return;
+                const fps = Math.max(1, Math.min(60, Math.floor(this.sequence.fps || this.video.fps || 12)));
+                const preset = encodeURIComponent(this.sequence.preset || 'original');
+                const url = `/api/images/jobs/${this.result.jobId}/gif?fps=${fps}&preset=${preset}`;
+                window.location.href = url;
+            },
+
+            downloadSpineZip() {
+                if (!this.result || !this.result.jobId) return;
+                const cols = Math.max(1, Math.min(50, Math.floor(this.sequence.cols || 4)));
+                const gap = Math.max(0, Math.min(128, Math.floor(this.sequence.gap || 0)));
+                const fps = Math.max(1, Math.min(60, Math.floor(this.sequence.fps || this.video.fps || 12)));
+                const preset = encodeURIComponent(this.sequence.preset || 'original');
+                const url = `/api/images/jobs/${this.result.jobId}/spineZip?cols=${cols}&gap=${gap}&fps=${fps}&preset=${preset}`;
+                window.location.href = url;
+            },
+
+            openSpineEditor() {
+                if (!this.result || !this.result.jobId) return;
+                const cols = Math.max(1, Math.min(50, Math.floor(this.sequence.cols || 4)));
+                const gap = Math.max(0, Math.min(128, Math.floor(this.sequence.gap || 0)));
+                const preset = encodeURIComponent(this.sequence.preset || 'original');
+                const url = `/api/images/jobs/${this.result.jobId}/sheet?cols=${cols}&gap=${gap}&preset=${preset}`;
+                window.open(url, '_blank');
+            },
+
+            formatTime(seconds) {
+                const s = Math.max(0, Number(seconds || 0));
+                const totalMs = Math.floor(s * 1000);
+                const ms = totalMs % 1000;
+                const totalSec = Math.floor(totalMs / 1000);
+                const sec = totalSec % 60;
+                const min = Math.floor(totalSec / 60);
+                const mm = String(min).padStart(2, '0');
+                const ss = String(sec).padStart(2, '0');
+                const mss = String(ms).padStart(3, '0');
+                return `${mm}:${ss}.${mss}`;
+            },
+
+            formatDuration(seconds) {
+                const s = Math.max(0, Number(seconds || 0));
+                if (s >= 60) {
+                    const min = Math.floor(s / 60);
+                    const sec = Math.floor(s % 60);
+                    return `${min}分${sec}秒`;
+                }
+                return `${s.toFixed(2)} 秒`;
             },
 
             // --- Common ---
