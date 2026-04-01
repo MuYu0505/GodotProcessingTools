@@ -9,6 +9,7 @@ public class ProcessOptions {
     private int targetWidth = 64;
     private int targetHeight = 64;
     private int backgroundTolerance = 28;
+    private int backgroundEdgeBoost = 0;
     private int watermarkTolerance = 60;
     private int alphaThreshold = 10;
     private String watermarkCorner = "AUTO";
@@ -67,6 +68,14 @@ public class ProcessOptions {
 
     public void setBackgroundTolerance(int backgroundTolerance) {
         this.backgroundTolerance = backgroundTolerance;
+    }
+
+    public int getBackgroundEdgeBoost() {
+        return backgroundEdgeBoost;
+    }
+
+    public void setBackgroundEdgeBoost(int backgroundEdgeBoost) {
+        this.backgroundEdgeBoost = backgroundEdgeBoost;
     }
 
     public int getWatermarkTolerance() {

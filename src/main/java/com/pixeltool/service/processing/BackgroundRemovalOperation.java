@@ -58,7 +58,8 @@ public class BackgroundRemovalOperation implements ImageOperation {
                 samplePoints,
                 background,
                 context.getOptions().getBackgroundTolerance(),
-                context.getOptions().getAlphaThreshold()
+                context.getOptions().getAlphaThreshold(),
+                context.getOptions().getBackgroundEdgeBoost()
         );
 
         BufferedImage transparent = ImageSupport.transparentCanvas(source.getWidth(), source.getHeight());
@@ -78,7 +79,7 @@ public class BackgroundRemovalOperation implements ImageOperation {
         }
 
         // 消除边缘白边 (Defringe)
-        defringe(transparent, backgroundPixels, background);
+        defringe(transparent, backgroundPixels, background, context.getOptions().getBackgroundEdgeBoost());
 
         boolean hasManualSeed = !samplePoints.isEmpty();
         if (context.getOptions().isRemoveBackground() || hasManualSeed) {
@@ -90,7 +91,7 @@ public class BackgroundRemovalOperation implements ImageOperation {
         }
     }
 
-    private void defringe(BufferedImage image, boolean[][] backgroundPixels, Color bgColor) {
+    private void defringe(BufferedImage image, boolean[][] backgroundPixels, Color bgColor, int edgeBoost) {
         int width = image.getWidth();
         int height = image.getHeight();
         
@@ -165,11 +166,21 @@ public class BackgroundRemovalOperation implements ImageOperation {
                     if (distToBg + distToInner > 0) {
                         alphaRatio = (float) distToBg / (distToBg + distToInner);
                     }
-                    // 增加对比度，让边缘更清晰
-                    alphaRatio = (float) Math.pow(alphaRatio, 1.5);
+                    float gamma = 1.5f;
+                    if (edgeBoost > 0) {
+                        gamma = 1.5f + Math.min(1.0f, edgeBoost / 40.0f);
+                    }
+                    alphaRatio = (float) Math.pow(alphaRatio, gamma);
                     
                     int newAlpha = (int) (255 * alphaRatio);
                     newAlpha = Math.max(0, Math.min(255, newAlpha));
+                    int alphaCutoff = 0;
+                    if (edgeBoost > 0) {
+                        alphaCutoff = Math.min(80, 24 + edgeBoost * 2);
+                    }
+                    if (alphaCutoff > 0 && newAlpha <= alphaCutoff) {
+                        newAlpha = 0;
+                    }
                     
                     // 使用内部颜色和计算出的alpha重新赋值，以去除白边颜色污染
                     image.setRGB(x, y, new Color(innerR, innerG, innerB, newAlpha).getRGB());

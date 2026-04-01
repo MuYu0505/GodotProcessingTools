@@ -104,7 +104,7 @@ public final class ImageSupport {
         return new Color((int) (red / count), (int) (green / count), (int) (blue / count));
     }
 
-    public static boolean[][] detectBackground(BufferedImage image, List<Point> seedPoints, Color fallbackBackground, int tolerance, int alphaThreshold) {
+    public static boolean[][] detectBackground(BufferedImage image, List<Point> seedPoints, Color fallbackBackground, int tolerance, int alphaThreshold, int edgeBoost) {
         int width = image.getWidth();
         int height = image.getHeight();
         boolean[][] visited = new boolean[height][width];
@@ -142,8 +142,8 @@ public final class ImageSupport {
             }
         }
 
-        int[] dx = new int[]{1, -1, 0, 0};
-        int[] dy = new int[]{0, 0, 1, -1};
+        int[] dx = new int[]{1, -1, 0, 0, 1, 1, -1, -1};
+        int[] dy = new int[]{0, 0, 1, -1, 1, -1, 1, -1};
         while (!queue.isEmpty()) {
             Point point = queue.poll();
             for (int i = 0; i < dx.length; i++) {
@@ -158,7 +158,81 @@ public final class ImageSupport {
                 }
             }
         }
-        return visited;
+
+        boolean[][] refined = new boolean[height][width];
+        for (int y = 0; y < height; y++) {
+            System.arraycopy(visited[y], 0, refined[y], 0, width);
+        }
+
+        int edgeTolerance = tolerance + Math.max(0, edgeBoost);
+
+        for (int pass = 0; pass < 2; pass++) {
+            boolean[][] next = new boolean[height][width];
+            for (int y = 0; y < height; y++) {
+                System.arraycopy(refined[y], 0, next[y], 0, width);
+            }
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    if (next[y][x]) {
+                        continue;
+                    }
+                    if (!matchesAnyBackground(image, x, y, targetColors, edgeTolerance, alphaThreshold)) {
+                        continue;
+                    }
+                    int bgNeighbors = 0;
+                    for (int i = 0; i < dx.length; i++) {
+                        int nx = x + dx[i];
+                        int ny = y + dy[i];
+                        if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+                            continue;
+                        }
+                        if (refined[ny][nx]) {
+                            bgNeighbors++;
+                        }
+                    }
+                    if (bgNeighbors >= 4) {
+                        next[y][x] = true;
+                    }
+                }
+            }
+            refined = next;
+        }
+
+        if (edgeBoost > 0) {
+            for (int pass = 0; pass < 2; pass++) {
+                boolean[][] next = new boolean[height][width];
+                for (int y = 0; y < height; y++) {
+                    System.arraycopy(refined[y], 0, next[y], 0, width);
+                }
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        if (next[y][x]) {
+                            continue;
+                        }
+                        if (!matchesAnyBackground(image, x, y, targetColors, edgeTolerance, alphaThreshold)) {
+                            continue;
+                        }
+                        boolean nearBackground = false;
+                        for (int i = 0; i < dx.length; i++) {
+                            int nx = x + dx[i];
+                            int ny = y + dy[i];
+                            if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+                                continue;
+                            }
+                            if (refined[ny][nx]) {
+                                nearBackground = true;
+                                break;
+                            }
+                        }
+                        if (nearBackground) {
+                            next[y][x] = true;
+                        }
+                    }
+                }
+                refined = next;
+            }
+        }
+        return refined;
     }
 
     private static void enqueueBorderMulti(BufferedImage image, List<Color> targetColors, int tolerance, int alphaThreshold,

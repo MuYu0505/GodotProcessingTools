@@ -1037,6 +1037,23 @@
                     <span style="color: var(--text-muted); font-size: 14px;">(不开启=不自动；仍会应用你手动选点/多点的抠图效果)</span>
                 </div>
                 <div style="width: 100%; height: 1px; background: var(--border); margin: 5px 0;"></div>
+                <div style="display: flex; gap: 16px; flex-wrap: wrap; width: 100%;">
+                    <label style="display: flex; flex-direction: column; gap: 6px; min-width: 260px; flex: 1;">
+                        <span style="font-size: 13px; color: var(--text-main);">颜色容差: <strong style="color: var(--primary);">{{ options.backgroundTolerance }}</strong></span>
+                        <input type="range" min="0" max="120" v-model.number="options.backgroundTolerance" @input="onBgParamsChange">
+                        <small style="color: var(--text-muted); font-size: 12px;">视频抽帧背景可能有渐变/压缩噪点，建议适当提高</small>
+                    </label>
+                    <label style="display: flex; flex-direction: column; gap: 6px; min-width: 260px; flex: 1;">
+                        <span style="font-size: 13px; color: var(--text-main);">边缘净化: <strong style="color: var(--primary);">{{ options.backgroundEdgeBoost }}</strong></span>
+                        <input type="range" min="0" max="40" v-model.number="options.backgroundEdgeBoost" @input="onBgParamsChange">
+                        <small style="color: var(--text-muted); font-size: 12px;">专门清理角色边缘旁边残留的背景色（越大越干净，但太大可能吃掉细线）</small>
+                    </label>
+                    <label style="display: flex; flex-direction: column; gap: 6px; min-width: 260px; flex: 1;">
+                        <span style="font-size: 13px; color: var(--text-main);">Alpha 阈值: <strong style="color: var(--primary);">{{ options.alphaThreshold }}</strong></span>
+                        <input type="range" min="0" max="80" v-model.number="options.alphaThreshold" @input="onBgParamsChange">
+                        <small style="color: var(--text-muted); font-size: 12px;">用于把原本就接近透明的像素直接当背景</small>
+                    </label>
+                </div>
                 <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
                     <label>点击左侧图片中要作为透明背景的区域。按住鼠标中键或 Shift+左键 拖动可以平移画布。</label>
                     <button :class="['btn-secondary', { active: multiPointMode }]" @click="multiPointMode = !multiPointMode" :style="{ padding: '6px 12px', fontSize: '13px', backgroundColor: multiPointMode ? '#22c55e' : '', borderColor: multiPointMode ? '#16a34a' : '', color: multiPointMode ? 'white' : '' }">
@@ -1329,6 +1346,7 @@
                     targetWidth: 380,
                     targetHeight: 243,
                     backgroundTolerance: 28,
+                    backgroundEdgeBoost: 0,
                     watermarkTolerance: 60,
                     alphaThreshold: 10,
                     watermarkCorner: 'AUTO'
@@ -1353,6 +1371,7 @@
                 previewLoading: false,
                 previewInFlight: false,
                 previewPendingStep: null,
+                bgParamTimer: null,
                 result: { jobId: '', downloadUrl: '', items: [] }
             };
         },
@@ -1503,6 +1522,20 @@
                     return;
                 }
                 await this.refreshPreview(4);
+            },
+            onBgParamsChange() {
+                if (this.step < 4 || !this.activeItem) return;
+                if (this.bgParamTimer) {
+                    clearTimeout(this.bgParamTimer);
+                    this.bgParamTimer = null;
+                }
+                this.bgParamTimer = setTimeout(async () => {
+                    const hasPoints = this.activeItem.samplePoints && this.activeItem.samplePoints.length > 0;
+                    if (!this.activeItem.localOptions.removeBackground && !hasPoints) {
+                        return;
+                    }
+                    await this.refreshPreview(4);
+                }, 120);
             },
             onResizeToggle() {
                 if (!this.activeItem) return;
@@ -2139,9 +2172,15 @@
                     this.options.removeBackground = true;
                     this.options.removeWatermark = false;
                     this.options.resizeEnabled = false;
+                    this.options.backgroundTolerance = 40;
+                    this.options.backgroundEdgeBoost = 22;
+                    this.options.alphaThreshold = 10;
                 } else {
                     this.videoStage = 'setup';
                     this.resetVideoState();
+                    this.options.backgroundTolerance = 28;
+                    this.options.backgroundEdgeBoost = 0;
+                    this.options.alphaThreshold = 10;
                 }
             },
 
