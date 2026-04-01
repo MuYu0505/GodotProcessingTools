@@ -1,7 +1,5 @@
 package com.pixeltool.util;
 
-import com.pixeltool.dto.ProcessOptions;
-
 import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -221,19 +219,6 @@ public final class ImageSupport {
 
     public static int brightness(Color color) {
         return (color.getRed() + color.getGreen() + color.getBlue()) / 3;
-    }
-
-    public static boolean isWatermarkPixel(Color color, Color background, ProcessOptions options) {
-        if (color == null || background == null || options == null) {
-            return false;
-        }
-        int distance = colorDistance(color, background);
-        int brightnessGap = Math.abs(brightness(color) - brightness(background));
-        return color.getAlpha() > options.getAlphaThreshold()
-                && distance <= options.getWatermarkTolerance()
-                && brightnessGap >= 4
-                && brightnessGap <= options.getWatermarkTolerance()
-                && saturation(color) <= 50;
     }
 
     public static Rectangle findOpaqueBounds(BufferedImage image, int alphaThreshold) {
