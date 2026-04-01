@@ -38,7 +38,7 @@ public class WatermarkCleanupOperation implements ImageOperation {
         for (int y = region.y; y < region.y + region.height; y++) {
             for (int x = region.x; x < region.x + region.width; x++) {
                 Color color = new Color(source.getRGB(x, y), true);
-                if (isWatermarkPixel(color, background, context.getOptions())) {
+                if (ImageSupport.isWatermarkPixel(color, background, context.getOptions())) {
                     candidates.add(new int[]{x, y});
                 }
             }
@@ -119,21 +119,11 @@ public class WatermarkCleanupOperation implements ImageOperation {
         for (int y = region.y; y < region.y + region.height; y++) {
             for (int x = region.x; x < region.x + region.width; x++) {
                 Color color = new Color(image.getRGB(x, y), true);
-                if (isWatermarkPixel(color, background, options)) {
+                if (ImageSupport.isWatermarkPixel(color, background, options)) {
                     score++;
                 }
             }
         }
         return score;
-    }
-
-    private boolean isWatermarkPixel(Color color, Color background, ProcessOptions options) {
-        int distance = ImageSupport.colorDistance(color, background);
-        int brightnessGap = Math.abs(ImageSupport.brightness(color) - ImageSupport.brightness(background));
-        return color.getAlpha() > options.getAlphaThreshold()
-                && distance <= options.getWatermarkTolerance()
-                && brightnessGap >= 4
-                && brightnessGap <= options.getWatermarkTolerance()
-                && ImageSupport.saturation(color) <= 50;
     }
 }

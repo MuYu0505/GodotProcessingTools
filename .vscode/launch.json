@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Spring Boot-PixelArtImageToolApplication<pixel-art-image-tool>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.pixeltool.PixelArtImageToolApplication",
+            "projectName": "pixel-art-image-tool",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}
