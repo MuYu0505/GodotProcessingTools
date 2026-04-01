@@ -855,10 +855,27 @@
                                 </div>
                                 <div class="video-card-body">
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                        <label class="field field-card">
-                                            <span>每秒提取帧数</span>
-                                            <input min="1" max="24" type="number" v-model.number="video.fps" @input="recalcVideoEstimate">
-                                        </label>
+                                        <div class="field field-card">
+                                            <span>提取方式</span>
+                                            <div class="btn-group" style="margin-top: 8px;">
+                                                <button class="btn-secondary btn-small" type="button" :class="{ active: video.extractMode === 'fps' }" @click="video.extractMode = 'fps'; recalcVideoEstimate()">按 FPS</button>
+                                                <button class="btn-secondary btn-small" type="button" :class="{ active: video.extractMode === 'count' }" @click="video.extractMode = 'count'; recalcVideoEstimate()">按 总帧数</button>
+                                            </div>
+                                            <div style="margin-top: 10px;" v-if="video.extractMode === 'fps'">
+                                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                                    <span style="color: var(--text-muted); font-size: 12px;">每秒提取帧数 (FPS)</span>
+                                                    <strong style="color: var(--text-main); font-size: 12px;">{{ Math.floor(video.effectiveFps || 0) }} FPS</strong>
+                                                </div>
+                                                <input min="1" max="240" type="number" v-model.number="video.fps" @input="recalcVideoEstimate">
+                                            </div>
+                                            <div style="margin-top: 10px;" v-else>
+                                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                                    <span style="color: var(--text-muted); font-size: 12px;">目标总帧数</span>
+                                                    <strong style="color: var(--text-main); font-size: 12px;">等效 {{ Math.floor(video.effectiveFps || 0) }} FPS</strong>
+                                                </div>
+                                                <input min="1" max="5000" type="number" v-model.number="video.frameCount" @input="recalcVideoEstimate">
+                                            </div>
+                                        </div>
                                         <div class="metric-card">
                                             <span>预计结果</span>
                                             <strong>{{ video.estimatedFrames }} 帧</strong>
@@ -1114,66 +1131,71 @@
             <h2>最终导出</h2>
         </div>
         <div class="step-content">
-            <div class="toolbar" style="margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
-                    <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; color: var(--text-main); cursor: pointer; background: rgba(139, 92, 246, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--primary);">
-                        <input type="checkbox" v-model="activeItem.localOptions.resizeEnabled" @change="onResizeToggle" style="width: 18px; height: 18px;"> 
-                        启用自动调整像素功能
-                    </label>
-                    <span style="color: var(--text-muted); font-size: 14px;">(不开启=不调整尺寸导出；仍可先手动设置尺寸)</span>
-                </div>
-            </div>
-            
-            <div>
-                <!-- 预设尺寸按钮 -->
-                <div class="export-presets">
-                    <button class="preset-btn" :class="{ active: !activeItem.localOptions.resizeEnabled }" @click="applyPreset(null, null)">
-                        <span>原图尺寸</span>
-                        <span class="preset-desc">不更改像素，仅导出</span>
-                    </button>
-                    <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 16 && activeItem.localOptions.targetHeight === 16 }" @click="applyPreset(16, 16)">
-                        <span>16x16</span>
-                        <span class="preset-desc">小型道具/子弹</span>
-                    </button>
-                    <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 32 && activeItem.localOptions.targetHeight === 32 }" @click="applyPreset(32, 32)">
-                        <span>32x32</span>
-                        <span class="preset-desc">标准主角/小怪</span>
-                    </button>
-                    <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 380 && activeItem.localOptions.targetHeight === 243 }" @click="applyPreset(380, 243)">
-                        <span>380x243</span>
-                        <span class="preset-desc">高清主角</span>
-                    </button>
-                    <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 128 && activeItem.localOptions.targetHeight === 128 }" @click="applyPreset(128, 128)">
-                        <span>128x128</span>
-                        <span class="preset-desc">大型物件/立绘</span>
-                    </button>
-                </div>
-                
-                <div class="export-settings">
-                    <div class="field">
-                        <label>
-                            目标宽度（当前图片）
-                            <button class="lock-btn" :class="{ unlocked: !keepAspectRatio }" @click="toggleKeepAspect" title="锁定/解锁宽高比">
-                                {{ keepAspectRatio ? '🔒' : '🔓' }}
-                            </button>
+            <div v-if="mode === 'image'">
+                <div class="toolbar" style="margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
+                        <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; color: var(--text-main); cursor: pointer; background: rgba(139, 92, 246, 0.2); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--primary);">
+                            <input type="checkbox" v-model="activeItem.localOptions.resizeEnabled" @change="onResizeToggle" style="width: 18px; height: 18px;">
+                            启用自动调整像素功能
                         </label>
-                        <input type="number" min="8" max="2048" v-model.number="activeItem.localOptions.targetWidth" @input="onWidthChange">
+                        <span style="color: var(--text-muted); font-size: 14px;">(不开启=不调整尺寸导出；仍可先手动设置尺寸)</span>
                     </div>
-                    <div class="field">
-                        <label>目标高度（当前图片）</label>
-                        <input type="number" min="8" max="2048" v-model.number="activeItem.localOptions.targetHeight" @input="onHeightChange">
+                </div>
+
+                <div>
+                    <div class="export-presets">
+                        <button class="preset-btn" :class="{ active: !activeItem.localOptions.resizeEnabled }" @click="applyPreset(null, null)">
+                            <span>原图尺寸</span>
+                            <span class="preset-desc">不更改像素，仅导出</span>
+                        </button>
+                        <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 32 && activeItem.localOptions.targetHeight === 32 }" @click="applyPreset(32, 32)">
+                            <span>32×32</span>
+                            <span class="preset-desc">像素小图标</span>
+                        </button>
+                        <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 64 && activeItem.localOptions.targetHeight === 64 }" @click="applyPreset(64, 64)">
+                            <span>64×64</span>
+                            <span class="preset-desc">中等精灵</span>
+                        </button>
+                        <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 128 && activeItem.localOptions.targetHeight === 128 }" @click="applyPreset(128, 128)">
+                            <span>128×128</span>
+                            <span class="preset-desc">细节更清晰</span>
+                        </button>
+                        <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 256 && activeItem.localOptions.targetHeight === 256 }" @click="applyPreset(256, 256)">
+                            <span>256×256</span>
+                            <span class="preset-desc">高分辨率像素</span>
+                        </button>
+                        <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 380 && activeItem.localOptions.targetHeight === 380 }" @click="applyPreset(380, 380)">
+                            <span>380×380</span>
+                            <span class="preset-desc">高清主角</span>
+                        </button>
+                    </div>
+
+                    <div class="export-settings">
+                        <div class="field">
+                            <label>
+                                目标宽度（当前图片）
+                                <button class="lock-btn" :class="{ unlocked: !keepAspectRatio }" @click="toggleKeepAspect" title="锁定/解锁宽高比">
+                                    {{ keepAspectRatio ? '🔒' : '🔓' }}
+                                </button>
+                            </label>
+                            <input type="number" min="8" max="2048" v-model.number="activeItem.localOptions.targetWidth" @input="onWidthChange">
+                        </div>
+                        <div class="field">
+                            <label>目标高度（当前图片）</label>
+                            <input type="number" min="8" max="2048" v-model.number="activeItem.localOptions.targetHeight" @input="onHeightChange">
+                        </div>
                     </div>
                 </div>
             </div>
             
-            <div class="step-actions">
+            <div class="step-actions" v-if="mode === 'image'">
                 <button class="btn-success" @click="submitBatch" :disabled="loading" style="font-size: 18px; padding: 12px 40px; border-radius: 16px;">
-                    <span v-if="!loading">{{ mode === 'video' ? '4. 生成序列图' : '🚀 开始批量导出' }}</span>
+                    <span v-if="!loading">🚀 开始批量导出</span>
                     <span v-else>⏳ 批量处理中，请稍候...</span>
                 </button>
             </div>
             
-            <div v-if="result.items.length > 0" class="result-area">
+            <div v-if="mode === 'video' ? fileItems.length > 0 : result.items.length > 0" class="result-area">
                 <div v-if="mode === 'image'">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <h3 style="margin: 0;">导出结果 ({{result.items.length}} 张)</h3>
@@ -1192,7 +1214,7 @@
 
                 <div v-else>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap;">
-                        <h3 style="margin: 0;">序列图预览 ({{result.items.length}} 帧)</h3>
+                        <h3 style="margin: 0;">序列图预览 ({{ sequencePreviewCount }} 帧)</h3>
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <span style="color: var(--text-muted); font-size: 12px;">修改导出参数会自动刷新预览</span>
                         </div>
@@ -1220,7 +1242,7 @@
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; flex-wrap: wrap;">
                                     <div style="color: var(--text-muted); font-size: 12px;">
-                                        第 {{ sequence.animIndex + 1 }} / {{ result.items.length }} 帧 · {{ formatTime(sequence.animIndex / Math.max(1, sequence.fps)) }} · {{ sequence.fps }} FPS 预览
+                                        第 {{ sequence.animIndex + 1 }} / {{ sequencePreviewCount }} 帧 · {{ formatTime(sequence.animIndex / Math.max(1, sequence.fps)) }} · {{ sequence.fps }} FPS 预览
                                     </div>
                                     <div style="display: flex; gap: 10px;">
                                         <button class="btn-secondary btn-small" type="button" @click="toggleSequenceAnim">{{ sequence.playing ? '暂停' : '播放' }}</button>
@@ -1242,14 +1264,15 @@
                                 <input min="0" max="64" type="number" v-model.number="sequence.gap" @input="scheduleSequenceRender">
                             </label>
                             <label class="field">
-                                <span>单帧尺寸预设</span>
-                                <select v-model="sequence.preset" @change="scheduleSequenceRender">
-                                    <option value="original">原始比例</option>
-                                    <option value="32">32 × 32</option>
-                                    <option value="64">64 × 64</option>
-                                    <option value="128">128 × 128</option>
-                                    <option value="256">256 × 256</option>
-                                </select>
+                                            <span>单帧尺寸预设</span>
+                                            <select v-model="sequence.preset" @change="scheduleSequenceRender">
+                                                <option value="original">原图尺寸</option>
+                                                <option value="32">32 × 32</option>
+                                                <option value="64">64 × 64</option>
+                                                <option value="128">128 × 128</option>
+                                                <option value="256">256 × 256</option>
+                                                <option value="380">380 × 380</option>
+                                            </select>
                             </label>
 
                             <div class="metric-card">
@@ -1262,7 +1285,7 @@
                                 <button class="btn-secondary" type="button" @click="openSpineEditor" :disabled="!result.jobId">进入 Spine 动画</button>
                                 <button class="btn-primary" type="button" @click="downloadSequencePng" :disabled="sequence.rendering || !result.items.length">下载透明序列图 PNG</button>
                                 <button class="btn-download" type="button" @click="downloadSequenceGif" :disabled="!result.jobId">下载动画 GIF</button>
-                                <a class="btn-success" :href="result.downloadUrl">下载透明单帧 ZIP</a>
+                                <a class="btn-success" :href="result.downloadUrl" :style="{ pointerEvents: result.downloadUrl ? 'auto' : 'none', opacity: result.downloadUrl ? 1 : 0.5 }">下载透明单帧 ZIP</a>
                                 <button class="btn-secondary" type="button" @click="downloadSpineZip" :disabled="!result.jobId">下载 Spine ZIP</button>
                             </div>
 
@@ -1288,7 +1311,7 @@
     createApp({
         data() {
             return {
-                currentTheme: 'dark',
+                currentTheme: 'light',
                 mode: 'image',
                 videoStage: 'setup',
                 step: 1,
@@ -1308,7 +1331,10 @@
                     videoHeight: 0,
                     referenceTime: 0,
                     crop: { x: 0, y: 0, width: 0, height: 0 },
+                    extractMode: 'fps',
                     fps: 12,
+                    frameCount: 150,
+                    effectiveFps: 12,
                     segmentStart: 0,
                     segmentEnd: 0,
                     estimatedFrames: 0,
@@ -1382,6 +1408,11 @@
             cropAspectRatio() {
                 if (!this.activeItem || !this.activeItem.crop.height) return 1;
                 return this.activeItem.crop.width / this.activeItem.crop.height;
+            },
+            sequencePreviewCount() {
+                if (this.result && this.result.items && this.result.items.length > 0) return this.result.items.length;
+                if (this.mode === 'video') return this.fileItems ? this.fileItems.length : 0;
+                return 0;
             }
         },
         watch: {
@@ -1689,6 +1720,19 @@
                     });
                 } else if (targetStep === 4) {
                     this.$nextTick(() => { this.initBgCanvas(); });
+                } else if (this.mode === 'video' && targetStep === 5) {
+                    this.$nextTick(() => {
+                        if (this.video && this.video.effectiveFps) {
+                            this.sequence.fps = this.video.effectiveFps;
+                        }
+                        this.sequence.animIndex = 0;
+                        this.sequence.playing = true;
+                        this.scheduleSequenceRender(true);
+                        this.startSequenceAnim();
+                        if (!this.loading && (!this.result || !this.result.items || this.result.items.length === 0) && this.fileItems && this.fileItems.length > 0) {
+                            this.submitBatch();
+                        }
+                    });
                 }
                 
                 // Smooth scroll to the new step section
@@ -2126,7 +2170,7 @@
                     this.result = await res.json();
 
                     if (this.mode === 'video') {
-                        this.sequence.fps = this.video && this.video.fps ? this.video.fps : this.sequence.fps;
+                        this.sequence.fps = this.video && this.video.effectiveFps ? this.video.effectiveFps : this.sequence.fps;
                         this.sequence.animIndex = 0;
                         this.sequence.playing = true;
                         this.sequence.imageCache = {};
@@ -2197,7 +2241,10 @@
                     videoHeight: 0,
                     referenceTime: 0,
                     crop: { x: 0, y: 0, width: 0, height: 0 },
+                    extractMode: 'fps',
                     fps: 12,
+                    frameCount: 150,
+                    effectiveFps: 12,
                     segmentStart: 0,
                     segmentEnd: 0,
                     estimatedFrames: 0,
@@ -2304,15 +2351,25 @@
                     if (this.video) this.video.estimatedFrames = 0;
                     return;
                 }
-                const fps = Math.max(1, Math.min(24, Math.floor(this.video.fps || 12)));
-                this.video.fps = fps;
                 const duration = Math.max(0, (this.video.segmentEnd || 0) - (this.video.segmentStart || 0));
                 if (duration <= 0) {
                     this.video.estimatedFrames = 0;
+                    this.video.effectiveFps = 0;
                     return;
                 }
-                const estimated = Math.floor(duration * fps) + 1;
-                this.video.estimatedFrames = Math.max(0, estimated);
+                const mode = this.video.extractMode === 'count' ? 'count' : 'fps';
+                if (mode === 'count') {
+                    const count = Math.max(1, Math.min(5000, Math.floor(this.video.frameCount || 1)));
+                    this.video.frameCount = count;
+                    this.video.estimatedFrames = count;
+                    this.video.effectiveFps = duration > 0 ? Math.max(1, Math.round((count - 1) / duration)) : 1;
+                } else {
+                    const fps = Math.max(1, Math.min(240, Math.floor(this.video.fps || 12)));
+                    this.video.fps = fps;
+                    const estimated = Math.floor(duration * fps) + 1;
+                    this.video.estimatedFrames = Math.max(0, estimated);
+                    this.video.effectiveFps = fps;
+                }
             },
 
             ensureVideoOffscreen() {
@@ -2453,12 +2510,38 @@
             async extractVideoFrames() {
                 if (!this.video || !this.video.ready) return;
                 if (this.video.extracting) return;
-                const duration = Math.max(0, (this.video.segmentEnd || 0) - (this.video.segmentStart || 0));
-                if (duration <= 0) return;
-                const fps = Math.max(1, Math.min(24, Math.floor(this.video.fps || 12)));
-                this.video.fps = fps;
                 this.recalcVideoEstimate();
                 if (this.video.estimatedFrames <= 0) return;
+                const start = this.video.segmentStart || 0;
+                const end = this.video.segmentEnd || 0;
+                const duration = Math.max(0, end - start);
+                if (duration <= 0) return;
+                const mode = this.video.extractMode === 'count' ? 'count' : 'fps';
+                let times = [];
+                if (mode === 'count') {
+                    const count = Math.max(1, Math.min(5000, Math.floor(this.video.estimatedFrames || 1)));
+                    if (count === 1) {
+                        times = [start];
+                    } else {
+                        const step = duration / (count - 1);
+                        for (let i = 0; i < count; i++) {
+                            times.push(start + step * i);
+                        }
+                        times[times.length - 1] = end;
+                    }
+                } else {
+                    const fps = Math.max(1, Math.min(240, Math.floor(this.video.fps || 12)));
+                    this.video.fps = fps;
+                    const count = Math.max(1, Math.floor(duration * fps) + 1);
+                    times = new Array(count);
+                    for (let i = 0; i < count; i++) {
+                        const t = start + i / fps;
+                        times[i] = t > end ? end : t;
+                    }
+                    if (times.length > 0) {
+                        times[times.length - 1] = end;
+                    }
+                }
 
                 const videoEl = this.$refs.videoEl;
                 this.ensureVideoOffscreen();
@@ -2471,14 +2554,10 @@
 
                 const crop = { ...this.video.crop };
                 const frames = [];
-                const start = this.video.segmentStart || 0;
-                const end = this.video.segmentEnd || 0;
-                const maxCount = this.video.estimatedFrames;
+                const maxCount = times.length;
 
                 for (let i = 0; i < maxCount; i++) {
-                    const t = start + i / fps;
-                    if (t > end + 0.0001) break;
-                    await this.seekVideo(t);
+                    await this.seekVideo(times[i]);
                     this._videoOffscreenCtx.clearRect(0, 0, this._videoOffscreenCanvas.width, this._videoOffscreenCanvas.height);
                     this._videoOffscreenCtx.drawImage(videoEl, 0, 0, this._videoOffscreenCanvas.width, this._videoOffscreenCanvas.height);
 
@@ -2550,14 +2629,15 @@
 
             startSequenceAnim() {
                 this.stopSequenceAnim();
-                if (!this.result || !this.result.items || this.result.items.length === 0) return;
+                const urls = this.getSequenceRenderUrls();
+                if (!urls || urls.length === 0) return;
                 if (!this.sequence.playing) return;
                 const fps = Math.max(1, Math.min(60, Math.floor(this.sequence.fps || 12)));
                 this.sequence.fps = fps;
                 const interval = Math.max(10, Math.floor(1000 / fps));
                 this.sequence.animTimer = setInterval(() => {
                     if (!this.sequence.playing) return;
-                    const total = this.result.items.length;
+                    const total = this.getSequenceRenderUrls().length;
                     if (total <= 0) return;
                     this.sequence.animIndex = (this.sequence.animIndex + 1) % total;
                     this.renderSequenceAnimFrame();
@@ -2596,30 +2676,43 @@
                 return img;
             },
 
+            getSequenceRenderUrls() {
+                if (this.result && this.result.items && this.result.items.length > 0) {
+                    return this.result.items.map(it => it.finalUrl).filter(Boolean);
+                }
+                if (this.mode === 'video' && this.fileItems && this.fileItems.length > 0) {
+                    return this.fileItems
+                        .map(it => (it.preview && it.preview.transparentUrl) ? it.preview.transparentUrl : it.src)
+                        .filter(Boolean);
+                }
+                return [];
+            },
+
             async resolveSequenceCellSize() {
                 const preset = this.sequence.preset;
                 if (preset && preset !== 'original') {
                     const size = Math.max(1, parseInt(preset, 10));
                     return { cellW: size, cellH: size };
                 }
-                if (!this.result || !this.result.items || this.result.items.length === 0) {
+                const urls = this.getSequenceRenderUrls();
+                if (!urls || urls.length === 0) {
                     return { cellW: 1, cellH: 1 };
                 }
-                const firstUrl = this.result.items[0].finalUrl;
-                const img = await this.getCachedResultImage(firstUrl);
+                const img = await this.getCachedResultImage(urls[0]);
                 if (!img) return { cellW: 1, cellH: 1 };
                 return { cellW: img.naturalWidth || img.width || 1, cellH: img.naturalHeight || img.height || 1 };
             },
 
             async renderSequenceSheet() {
-                if (!this.result || !this.result.items || this.result.items.length === 0) return;
+                const urls = this.getSequenceRenderUrls();
+                if (!urls || urls.length === 0) return;
                 const canvas = this.$refs.sequenceSheetCanvas;
                 if (!canvas) return;
 
                 this.sequence.rendering = true;
                 const token = ++this.sequence.renderToken;
                 try {
-                    const total = this.result.items.length;
+                    const total = urls.length;
                     const cols = Math.max(1, Math.min(50, Math.floor(this.sequence.cols || 4)));
                     const gap = Math.max(0, Math.min(128, Math.floor(this.sequence.gap || 0)));
                     this.sequence.cols = cols;
@@ -2640,8 +2733,7 @@
 
                     for (let i = 0; i < total; i++) {
                         if (token !== this.sequence.renderToken) return;
-                        const item = this.result.items[i];
-                        const img = await this.getCachedResultImage(item.finalUrl);
+                        const img = await this.getCachedResultImage(urls[i]);
                         if (!img) continue;
                         const col = i % cols;
                         const row = Math.floor(i / cols);
@@ -2672,11 +2764,12 @@
             },
 
             async renderSequenceAnimFrame() {
-                if (!this.result || !this.result.items || this.result.items.length === 0) return;
+                const urls = this.getSequenceRenderUrls();
+                if (!urls || urls.length === 0) return;
                 const canvas = this.$refs.sequenceAnimCanvas;
                 if (!canvas) return;
-                const index = Math.max(0, Math.min(this.result.items.length - 1, this.sequence.animIndex || 0));
-                const url = this.result.items[index].finalUrl;
+                const index = Math.max(0, Math.min(urls.length - 1, this.sequence.animIndex || 0));
+                const url = urls[index];
                 const img = await this.getCachedResultImage(url);
                 if (!img) return;
                 const w = img.naturalWidth || img.width || 1;

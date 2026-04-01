@@ -397,7 +397,7 @@ public class ImageBatchService {
                     int dh = Math.max(1, (int) Math.round(ih * scale));
                     int ox = x + (cellW - dw) / 2;
                     int oy = y + (cellH - dh) / 2;
-                    g.drawImage(img, 0, 0, iw, ih, ox, oy, dw, dh, null);
+                    g.drawImage(img, ox, oy, ox + dw, oy + dh, 0, 0, iw, ih, null);
                 } else {
                     int ox = x + (cellW - img.getWidth()) / 2;
                     int oy = y + (cellH - img.getHeight()) / 2;
@@ -436,7 +436,7 @@ public class ImageBatchService {
             int maxW = 1;
             int maxH = 1;
             for (Path p : frames) {
-                BufferedImage img = ImageIO.read(p.toFile());
+                BufferedImage img = safeReadImage(p);
                 if (img == null) continue;
                 maxW = Math.max(maxW, img.getWidth());
                 maxH = Math.max(maxH, img.getHeight());
@@ -449,7 +449,7 @@ public class ImageBatchService {
         try (ImageOutputStream ios = ImageIO.createImageOutputStream(out)) {
             GifSequenceWriter writer = new GifSequenceWriter(ios, BufferedImage.TYPE_INT_ARGB, delayCs, true);
             for (Path p : frames) {
-                BufferedImage img = ImageIO.read(p.toFile());
+                BufferedImage img = safeReadImage(p);
                 if (img == null) continue;
                 BufferedImage frame = new BufferedImage(frameW, frameH, BufferedImage.TYPE_INT_ARGB);
                 Graphics2D g = frame.createGraphics();
@@ -467,7 +467,7 @@ public class ImageBatchService {
                         int dh = Math.max(1, (int) Math.round(ih * scale));
                         int ox = (frameW - dw) / 2;
                         int oy = (frameH - dh) / 2;
-                        g.drawImage(img, 0, 0, iw, ih, ox, oy, dw, dh, null);
+                        g.drawImage(img, ox, oy, ox + dw, oy + dh, 0, 0, iw, ih, null);
                     } else {
                         int ox = (frameW - img.getWidth()) / 2;
                         int oy = (frameH - img.getHeight()) / 2;
@@ -588,6 +588,14 @@ public class ImageBatchService {
         }
     }
 
+    private BufferedImage safeReadImage(Path path) {
+        try {
+            return ImageIO.read(path.toFile());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private int parsePresetSize(String preset) {
         if (preset == null) return -1;
         String p = preset.trim();
@@ -624,44 +632,49 @@ public class ImageBatchService {
     private static class GifSequenceWriter {
         private final ImageWriter gifWriter;
         private final ImageWriteParam imageWriteParam;
-        private final IIOMetadata imageMetaData;
-        private final IIOMetadata streamMetaData;
+        private final int imageType;
+        private final int delayCs;
+        private final boolean loop;
 
         GifSequenceWriter(ImageOutputStream outputStream, int imageType, int delayCs, boolean loop) throws IOException {
-            gifWriter = ImageIO.getImageWritersByFormatName("gif").next();
+            java.util.Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("gif");
+            if (writers == null || !writers.hasNext()) {
+                throw new IllegalStateException("当前JRE不支持GIF写入");
+            }
+            gifWriter = writers.next();
             imageWriteParam = gifWriter.getDefaultWriteParam();
-            ImageTypeSpecifier imageTypeSpecifier = ImageTypeSpecifier.createFromBufferedImageType(imageType);
-            imageMetaData = gifWriter.getDefaultImageMetadata(imageTypeSpecifier, imageWriteParam);
-            streamMetaData = gifWriter.getDefaultStreamMetadata(imageWriteParam);
+            this.imageType = imageType;
+            this.delayCs = Math.max(1, delayCs);
+            this.loop = loop;
+            IIOMetadata streamMetaData = gifWriter.getDefaultStreamMetadata(imageWriteParam);
 
-            String metaFormatName = imageMetaData.getNativeMetadataFormatName();
-            IIOMetadataNode root = (IIOMetadataNode) imageMetaData.getAsTree(metaFormatName);
-            IIOMetadataNode gce = getNode(root, "GraphicControlExtension");
-            gce.setAttribute("disposalMethod", "none");
-            gce.setAttribute("userInputFlag", "FALSE");
-            gce.setAttribute("transparentColorFlag", "TRUE");
-            gce.setAttribute("delayTime", Integer.toString(delayCs));
-            gce.setAttribute("transparentColorIndex", "0");
-
-            imageMetaData.setFromTree(metaFormatName, root);
-
-            String streamFormatName = streamMetaData.getNativeMetadataFormatName();
-            IIOMetadataNode streamRoot = (IIOMetadataNode) streamMetaData.getAsTree(streamFormatName);
-            IIOMetadataNode appExtensions = getNode(streamRoot, "ApplicationExtensions");
-            IIOMetadataNode appNode = new IIOMetadataNode("ApplicationExtension");
-            appNode.setAttribute("applicationID", "NETSCAPE");
-            appNode.setAttribute("authenticationCode", "2.0");
-            int loopCount = loop ? 0 : 1;
-            appNode.setUserObject(new byte[]{0x1, (byte) (loopCount & 0xFF), (byte) ((loopCount >> 8) & 0xFF)});
-            appExtensions.appendChild(appNode);
-            streamMetaData.setFromTree(streamFormatName, streamRoot);
+            IIOMetadata effectiveStreamMeta = streamMetaData;
+            if (loop && effectiveStreamMeta != null) {
+                try {
+                    String streamFormatName = effectiveStreamMeta.getNativeMetadataFormatName();
+                    if (streamFormatName != null && streamFormatName.toLowerCase().contains("gif")) {
+                        IIOMetadataNode streamRoot = (IIOMetadataNode) effectiveStreamMeta.getAsTree(streamFormatName);
+                        IIOMetadataNode appExtensions = getNode(streamRoot, "ApplicationExtensions");
+                        IIOMetadataNode appNode = new IIOMetadataNode("ApplicationExtension");
+                        appNode.setAttribute("applicationID", "NETSCAPE");
+                        appNode.setAttribute("authenticationCode", "2.0");
+                        int loopCount = 0;
+                        appNode.setUserObject(new byte[]{0x1, (byte) (loopCount & 0xFF), (byte) ((loopCount >> 8) & 0xFF)});
+                        appExtensions.appendChild(appNode);
+                        effectiveStreamMeta.setFromTree(streamFormatName, streamRoot);
+                    }
+                } catch (Exception ignored) {
+                    effectiveStreamMeta = null;
+                }
+            }
 
             gifWriter.setOutput(outputStream);
-            gifWriter.prepareWriteSequence(streamMetaData);
+            gifWriter.prepareWriteSequence(effectiveStreamMeta);
         }
 
         void writeToSequence(BufferedImage img) throws IOException {
-            gifWriter.writeToSequence(new IIOImage(img, null, imageMetaData), imageWriteParam);
+            IIOMetadata meta = buildFrameMetadata();
+            gifWriter.writeToSequence(new IIOImage(img, null, meta), imageWriteParam);
         }
 
         void close() throws IOException {
@@ -678,6 +691,25 @@ public class ImageBatchService {
             IIOMetadataNode node = new IIOMetadataNode(nodeName);
             rootNode.appendChild(node);
             return node;
+        }
+
+        private IIOMetadata buildFrameMetadata() {
+            try {
+                ImageTypeSpecifier imageTypeSpecifier = ImageTypeSpecifier.createFromBufferedImageType(imageType);
+                IIOMetadata meta = gifWriter.getDefaultImageMetadata(imageTypeSpecifier, imageWriteParam);
+                if (meta == null) return null;
+                String metaFormatName = meta.getNativeMetadataFormatName();
+                if (metaFormatName == null || !metaFormatName.toLowerCase().contains("gif")) return meta;
+                IIOMetadataNode root = (IIOMetadataNode) meta.getAsTree(metaFormatName);
+                IIOMetadataNode gce = getNode(root, "GraphicControlExtension");
+                gce.setAttribute("disposalMethod", "restoreToBackgroundColor");
+                gce.setAttribute("userInputFlag", "FALSE");
+                gce.setAttribute("delayTime", Integer.toString(delayCs));
+                meta.setFromTree(metaFormatName, root);
+                return meta;
+            } catch (Exception e) {
+                return null;
+            }
         }
     }
 }

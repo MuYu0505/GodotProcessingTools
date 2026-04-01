@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -95,14 +96,21 @@ public class ImageController {
     public ResponseEntity<byte[]> gif(@PathVariable String jobId,
                                       @RequestParam(value = "fps", defaultValue = "12") int fps,
                                       @RequestParam(value = "preset", defaultValue = "original") String preset) throws IOException {
-        byte[] gif = imageBatchService.buildAnimatedGif(jobId, fps, preset);
-        if (gif == null || gif.length == 0) {
-            return ResponseEntity.notFound().build();
+        try {
+            byte[] gif = imageBatchService.buildAnimatedGif(jobId, fps, preset);
+            if (gif == null || gif.length == 0) {
+                return ResponseEntity.notFound().build();
+            }
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.valueOf("image/gif"));
+            headers.setContentDisposition(ContentDisposition.attachment().filename("preview.gif").build());
+            return ResponseEntity.ok().headers(headers).body(gif);
+        } catch (Exception e) {
+            String message = "GIF生成失败: " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : (": " + e.getMessage()));
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(new MediaType("text", "plain", StandardCharsets.UTF_8));
+            return ResponseEntity.status(500).headers(headers).body(message.getBytes(StandardCharsets.UTF_8));
         }
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.valueOf("image/gif"));
-        headers.setContentDisposition(ContentDisposition.attachment().filename("preview.gif").build());
-        return ResponseEntity.ok().headers(headers).body(gif);
     }
 
     @GetMapping("/jobs/{jobId}/spineZip")
