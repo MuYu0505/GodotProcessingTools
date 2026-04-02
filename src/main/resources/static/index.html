@@ -723,6 +723,7 @@
                 <div class="mode-switch">
                     <button type="button" class="mode-btn" :class="{ 'is-active': mode === 'image' }" @click="switchMode('image')">图片批量处理</button>
                     <button type="button" class="mode-btn" :class="{ 'is-active': mode === 'video' }" @click="switchMode('video')">视频转序列帧表</button>
+                    <button type="button" class="mode-btn" :class="{ 'is-active': mode === 'rig' }" @click="switchMode('rig')">骨骼动画实验（测试）</button>
                 </div>
             </div>
         </div>
@@ -743,7 +744,7 @@
     <section class="step-section" :class="{ active: step >= 1 }">
         <div class="step-header">
             <div class="step-number">1</div>
-            <h2>{{ mode === 'image' ? '上传图片' : (videoStage === 'setup' ? '上传视频' : '已提取帧') }}</h2>
+            <h2>{{ mode === 'image' ? '上传图片' : (mode === 'video' ? (videoStage === 'setup' ? '上传视频' : '已提取帧') : '上传角色部件') }}</h2>
         </div>
         <div class="step-content">
             <div v-if="mode === 'image'">
@@ -793,7 +794,7 @@
                 </div>
             </div>
 
-            <div v-else>
+            <div v-else-if="mode === 'video'">
                 <video ref="videoEl" style="display: none;" muted playsinline></video>
                 <div v-if="videoStage === 'setup'">
                     <div class="upload-area" @click="$refs.videoInput.click()">
@@ -938,6 +939,263 @@
                     </div>
                 </div>
             </div>
+            
+            <div v-else>
+                <div class="upload-area" @click="$refs.rigInput.click()" @dragover.prevent @drop.prevent="handleRigDrop">
+                    <input type="file" multiple accept="image/*" ref="rigInput" @change="handleRigFiles" style="display: none;">
+                    <div class="upload-icon">🦴</div>
+                    <div class="upload-text">点击或拖拽部件图到这里开始</div>
+                    <div class="upload-subtext">建议准备多张透明 PNG：头、身体、上臂、前臂、手、腿等（越分层越好绑骨）</div>
+                </div>
+                <div v-if="rig.parts.length > 0" style="margin-top: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <p style="margin: 0;">已导入 {{ rig.parts.length }} 个部件。下一步开始建骨并绑定。</p>
+                        <button class="btn-secondary btn-small" type="button" @click="clearRigParts">清空部件</button>
+                    </div>
+                    <div class="thumbnail-list" style="margin-top: 12px;">
+                        <div class="thumbnail" v-for="(part, index) in rig.parts" :key="part.id"
+                             :class="{ active: index === rig.activePartIndex }" @click="activateRigPart(index)">
+                            <img :src="part.src" alt="thumbnail">
+                        </div>
+                    </div>
+                    <div class="step-actions">
+                        <button class="btn-primary" @click="nextStep(2)" :disabled="rig.parts.length === 0">
+                            <span>✅ 下一步：建骨</span>
+                        </button>
+                    </div>
+                </div>
+                <div v-else style="margin-top: 16px; color: var(--text-muted); font-size: 12px; line-height: 1.6;">
+                    <div><strong style="color: var(--text-main);">新手流程（推荐）：</strong></div>
+                    <div>1) 先准备部件图（透明 PNG，按身体部位拆分）</div>
+                    <div>2) 导入后进入“建骨”，把骨头从根到末端画出来（例如：身体→上臂→前臂→手）</div>
+                    <div>3) 在“绑定部件”把每张 PNG 挂到对应骨骼上，再拖拽摆正</div>
+                    <div>4) 在“做动作”给骨头旋转打关键帧，点击播放预览</div>
+                    <div>5) 导出工程 JSON（后续可用于 Godot 运行时）</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="step-section" v-if="mode === 'rig' && step >= 2" :class="{ active: step >= 2 }">
+        <div class="step-header">
+            <div class="step-number">2</div>
+            <h2>建骨（从根到末端）</h2>
+        </div>
+        <div class="step-content">
+            <div class="toolbar" style="flex-wrap: wrap;">
+                <div class="btn-group">
+                    <button class="btn-secondary btn-small" :class="{ active: rig.tool === 'bone' }" @click="setRigTool('bone')">🦴 建骨</button>
+                    <button class="btn-secondary btn-small" :class="{ active: rig.tool === 'select' }" @click="setRigTool('select')">🖱️ 选择/拖拽</button>
+                </div>
+                <button class="btn-secondary btn-small" @click="resetRigView">复位视图</button>
+                <button class="btn-secondary btn-small" @click="renameSelectedRigBone" :disabled="!rig.selectedBoneId">重命名骨骼</button>
+                <span style="color: var(--text-muted); font-size: 12px;">提示：建骨先点起点再点终点；滚轮缩放，Shift+拖动平移；选择模式可拖动骨骼起点</span>
+            </div>
+            <div class="split-view">
+                <div class="view-panel">
+                    <h3>骨骼编辑画布</h3>
+                    <div class="canvas-container" style="aspect-ratio: 1/1;">
+                        <canvas ref="rigCanvas" class="overlay-canvas"
+                                style="position: absolute; inset: 0; width: 100%; height: 100%;"></canvas>
+                    </div>
+                </div>
+                <div class="view-panel">
+                    <h3>骨骼列表</h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div v-if="rig.bones.length === 0" class="placeholder-text">还没有骨骼，先用“建骨”画出身体主骨和四肢骨</div>
+                        <div v-else style="display: flex; flex-direction: column; gap: 8px;">
+                            <button v-for="bone in rig.bones" :key="bone.id"
+                                    class="btn-secondary btn-small"
+                                    :style="{ justifyContent: 'space-between', display: 'flex', alignItems: 'center', background: rig.selectedBoneId === bone.id ? 'rgba(34,197,94,0.2)' : '' }"
+                                    @click="selectRigBone(bone.id)">
+                                <span>{{ bone.name }}</span>
+                                <span style="color: var(--text-muted); font-size: 12px;">{{ bone.parentId ? '子骨' : '根骨' }}</span>
+                            </button>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn-secondary btn-small" @click="deleteSelectedRigBone" :disabled="!rig.selectedBoneId">删除选中骨骼</button>
+                            <button class="btn-secondary btn-small" @click="clearRigBones" :disabled="rig.bones.length === 0" style="border-color: #ef4444; color: #ef4444;">清空全部骨骼</button>
+                        </div>
+                        <div class="step-actions" style="margin-top: 12px;">
+                            <button class="btn-primary" @click="nextStep(3)" :disabled="rig.bones.length === 0">
+                                <span>✅ 下一步：绑定部件</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="step-section" v-if="mode === 'rig' && step >= 3" :class="{ active: step >= 3 }">
+        <div class="step-header">
+            <div class="step-number">3</div>
+            <h2>绑定部件（把 PNG 挂到骨骼上）</h2>
+        </div>
+        <div class="step-content">
+            <div class="toolbar" style="flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <label class="field" style="min-width: 240px;">
+                        <span>当前部件</span>
+                        <select v-model.number="rig.activePartIndex" @change="onRigBindingTargetChange">
+                            <option v-for="(p, idx) in rig.parts" :key="p.id" :value="idx">{{ p.name }}</option>
+                        </select>
+                    </label>
+                    <label class="field" style="min-width: 240px;">
+                        <span>绑定到骨骼</span>
+                        <select v-model="rig.bindingBoneId" @change="bindActivePartToBone">
+                            <option value="">未绑定</option>
+                            <option v-for="bone in rig.bones" :key="bone.id" :value="bone.id">{{ bone.name }}</option>
+                        </select>
+                    </label>
+                    <label class="field" style="min-width: 260px;">
+                        <span>部件旋转（度）</span>
+                        <input type="range" min="-180" max="180" :value="getActiveRigPart() ? (getActiveRigPart().rotationDeg || 0) : 0" @input="setActivePartRotationDeg($event.target.value)" :disabled="!getActiveRigPart()">
+                        <span style="color: var(--text-muted); font-size: 12px;">{{ getActiveRigPart() ? (getActiveRigPart().rotationDeg || 0) : 0 }}°</span>
+                    </label>
+                    <button class="btn-secondary btn-small" @click="toggleRigPartDrag" :disabled="!rig.bindingBoneId">
+                        {{ rig.draggingPart ? '停止拖拽摆正' : '拖拽摆正部件' }}
+                    </button>
+                    <button class="btn-secondary btn-small" @click="centerActivePartOnBone" :disabled="!rig.bindingBoneId">一键居中到骨骼</button>
+                </div>
+                <span style="color: var(--text-muted); font-size: 12px;">提示：先选择部件→选择骨骼→拖拽摆正，像拼积木一样把角色组起来</span>
+            </div>
+            <div class="split-view">
+                <div class="view-panel">
+                    <h3>绑定预览</h3>
+                    <div class="canvas-container" style="aspect-ratio: 1/1;">
+                        <canvas ref="rigBindCanvas" class="overlay-canvas"
+                                style="position: absolute; inset: 0; width: 100%; height: 100%;"></canvas>
+                    </div>
+                </div>
+                <div class="view-panel">
+                    <h3>部件列表</h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div class="thumbnail-list" style="margin: 0;">
+                            <div class="thumbnail" v-for="(part, index) in rig.parts" :key="part.id"
+                                 :class="{ active: index === rig.activePartIndex }" @click="activateRigPart(index)">
+                                <img :src="part.src" alt="thumbnail">
+                            </div>
+                        </div>
+                        <div style="color: var(--text-muted); font-size: 12px; line-height: 1.6;">
+                            <div><strong style="color: var(--text-main);">建议绑定策略：</strong></div>
+                            <div>身体/头：绑到身体主骨或头骨</div>
+                            <div>上臂/前臂/手：绑到对应骨骼</div>
+                            <div>腿/脚：绑到腿骨</div>
+                        </div>
+                        <div class="step-actions" style="margin-top: 12px;">
+                            <button class="btn-primary" @click="nextStep(4)" :disabled="!rigHasAnyBinding">
+                                <span>✅ 下一步：做动作</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="step-section" v-if="mode === 'rig' && step >= 4" :class="{ active: step >= 4 }">
+        <div class="step-header">
+            <div class="step-number">4</div>
+            <h2>做动作（打关键帧）</h2>
+        </div>
+        <div class="step-content">
+            <div class="toolbar" style="flex-wrap: wrap;">
+                <label class="field" style="min-width: 240px;">
+                    <span>当前骨骼</span>
+                    <select v-model="rig.selectedBoneId" @change="onRigSelectedBoneChange">
+                        <option value="" disabled>请选择骨骼</option>
+                        <option v-for="bone in rig.bones" :key="bone.id" :value="bone.id">{{ bone.name }}</option>
+                    </select>
+                </label>
+                <label class="field" style="min-width: 260px;">
+                    <span>旋转角度（度）</span>
+                    <input type="range" min="-180" max="180" v-model.number="rig.poseAngleDeg" @input="applyRigPoseAngle">
+                    <span style="color: var(--text-muted); font-size: 12px;">{{ rig.poseAngleDeg }}°</span>
+                </label>
+                <label class="field" style="min-width: 240px;">
+                    <span>当前帧</span>
+                    <input type="range" min="0" :max="Math.max(0, rig.timelineFrames - 1)" v-model.number="rig.currentFrame" @input="onRigFrameScrub">
+                    <span style="color: var(--text-muted); font-size: 12px;">{{ rig.currentFrame + 1 }} / {{ rig.timelineFrames }}</span>
+                </label>
+                <label class="field" style="min-width: 140px;">
+                    <span>FPS</span>
+                    <input type="number" min="1" max="60" v-model.number="rig.timelineFps">
+                </label>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn-secondary btn-small" @click="addRigKeyframe" :disabled="!rig.selectedBoneId">添加关键帧</button>
+                    <button class="btn-secondary btn-small" @click="toggleRigPlayback" :disabled="rig.bones.length === 0">{{ rig.playing ? '暂停' : '播放' }}</button>
+                    <button class="btn-secondary btn-small" @click="restartRigPlayback" :disabled="rig.bones.length === 0">重播</button>
+                </div>
+                <span style="color: var(--text-muted); font-size: 12px;">提示：在不同帧调整骨骼角度→点“添加关键帧”→播放预览</span>
+            </div>
+            <div class="split-view">
+                <div class="view-panel">
+                    <h3>动作预览</h3>
+                    <div class="canvas-container" style="aspect-ratio: 1/1;">
+                        <canvas ref="rigAnimCanvas" class="overlay-canvas"
+                                style="position: absolute; inset: 0; width: 100%; height: 100%;"></canvas>
+                    </div>
+                </div>
+                <div class="view-panel">
+                    <h3>关键帧</h3>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div v-if="rig.keyframes.length === 0" class="placeholder-text">还没有关键帧。选择骨骼→拖动角度→在当前帧添加关键帧</div>
+                        <div v-else style="display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow: auto;">
+                            <div v-for="(kf, idx) in rig.keyframes" :key="kf.id"
+                                 style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-panel);">
+                                <div style="display: flex; flex-direction: column;">
+                                    <strong style="font-size: 13px;">{{ kf.boneName }}</strong>
+                                    <span style="color: var(--text-muted); font-size: 12px;">第 {{ kf.frame + 1 }} 帧 · {{ kf.angleDeg }}°</span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn-secondary btn-small" type="button" @click="jumpToRigKeyframe(kf.frame)">跳到</button>
+                                    <button class="btn-secondary btn-small" type="button" @click="removeRigKeyframe(idx)" style="border-color: #ef4444; color: #ef4444;">删</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="step-actions" style="margin-top: 12px;">
+                            <button class="btn-primary" @click="nextStep(5)">
+                                <span>✅ 下一步：导出工程</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="step-section" v-if="mode === 'rig' && step >= 5" :class="{ active: step >= 5 }">
+        <div class="step-header">
+            <div class="step-number">5</div>
+            <h2>导出/保存工程（实验）</h2>
+        </div>
+        <div class="step-content">
+            <div class="toolbar" style="flex-wrap: wrap;">
+                <button class="btn-primary" type="button" @click="downloadRigProject">📥 下载工程 JSON</button>
+                <button class="btn-secondary" type="button" @click="$refs.rigProjectInput.click()">导入工程 JSON</button>
+                <input type="file" accept="application/json" ref="rigProjectInput" @change="importRigProject" style="display:none;">
+                <span style="color: var(--text-muted); font-size: 12px;">提示：这是实验格式，后续会逐步对接 Godot 运行时</span>
+            </div>
+            <div class="split-view">
+                <div class="view-panel">
+                    <h3>最终预览</h3>
+                    <div class="canvas-container" style="aspect-ratio: 1/1;">
+                        <canvas ref="rigExportCanvas" class="overlay-canvas"
+                                style="position: absolute; inset: 0; width: 100%; height: 100%;"></canvas>
+                    </div>
+                </div>
+                <div class="view-panel">
+                    <h3>新手清单</h3>
+                    <div style="color: var(--text-muted); font-size: 13px; line-height: 1.8;">
+                        <div>1) 部件图导入完成（透明 PNG）</div>
+                        <div>2) 已画出骨骼（至少身体主骨 + 四肢）</div>
+                        <div>3) 部件已绑定到骨骼并摆正</div>
+                        <div>4) 已打关键帧并播放确认</div>
+                        <div>5) 下载工程 JSON 保存进度</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -1039,7 +1297,7 @@
     </section>
 
     <!-- Step 4: Background Removal -->
-    <section class="step-section" v-if="step >= 4" :class="{ active: step >= 4 }">
+    <section class="step-section" v-if="mode !== 'rig' && step >= 4" :class="{ active: step >= 4 }">
         <div class="step-header">
             <div class="step-number">4</div>
             <h2>抠图去背景</h2>
@@ -1125,7 +1383,7 @@
     </section>
 
     <!-- Step 5: Export -->
-    <section class="step-section" v-if="step >= 5" :class="{ active: step >= 5 }">
+    <section class="step-section" v-if="mode !== 'rig' && step >= 5" :class="{ active: step >= 5 }">
         <div class="step-header">
             <div class="step-number">5</div>
             <h2>最终导出</h2>
@@ -1357,6 +1615,31 @@
                     animTimer: null,
                     imageCache: {}
                 },
+                rig: {
+                    parts: [],
+                    activePartIndex: 0,
+                    bones: [],
+                    selectedBoneId: '',
+                    tool: 'bone',
+                    draftStart: null,
+                    view: { panX: 0, panY: 0, zoom: 1 },
+                    bindingBoneId: '',
+                    draggingPart: false,
+                    draggingBone: false,
+                    draggingBoneId: '',
+                    lastMouseX: 0,
+                    lastMouseY: 0,
+                    pose: {},
+                    poseAngleDeg: 0,
+                    currentFrame: 0,
+                    timelineFrames: 30,
+                    timelineFps: 12,
+                    playing: false,
+                    playStartTs: 0,
+                    playStartFrame: 0,
+                    keyframes: [],
+                    rafId: 0
+                },
                 
                 // Brush State
                 brushMode: 'brush',
@@ -1405,6 +1688,10 @@
             activeItem() {
                 return this.fileItems[this.activeIndex];
             },
+            rigHasAnyBinding() {
+                if (!this.rig || !this.rig.parts) return false;
+                return this.rig.parts.some(p => !!p.boneId);
+            },
             cropAspectRatio() {
                 if (!this.activeItem || !this.activeItem.crop.height) return 1;
                 return this.activeItem.crop.width / this.activeItem.crop.height;
@@ -1420,7 +1707,7 @@
                 this.$nextTick(async () => {
                     if (this.mode === 'image' && this.step >= 2) this.initCropCanvas();
                     if (this.mode === 'image' && this.step >= 3) await this.initBrushCanvas();
-                    if (this.step >= 4) await this.initBgCanvas();
+                    if (this.mode !== 'rig' && this.step >= 4) await this.initBgCanvas();
                 });
             },
             applyToAll(newVal) {
@@ -1709,6 +1996,12 @@
             },
             nextStep(targetStep) {
                 this.step = targetStep;
+                if (this.mode === 'rig') {
+                    this.$nextTick(() => {
+                        this.initRigCanvases();
+                        this.renderRigAll();
+                    });
+                }
                 if (this.mode === 'image' && targetStep === 2) {
                     this.$nextTick(() => { this.initCropCanvas(); });
                 } else if (this.mode === 'image' && targetStep === 3) {
@@ -1718,7 +2011,7 @@
                         }
                         await this.initBrushCanvas();
                     });
-                } else if (targetStep === 4) {
+                } else if (this.mode !== 'rig' && targetStep === 4) {
                     this.$nextTick(() => { this.initBgCanvas(); });
                 } else if (this.mode === 'video' && targetStep === 5) {
                     this.$nextTick(() => {
@@ -2196,9 +2489,10 @@
             },
 
             switchMode(nextMode) {
-                if (nextMode !== 'image' && nextMode !== 'video') return;
+                if (nextMode !== 'image' && nextMode !== 'video' && nextMode !== 'rig') return;
                 if (this.mode === nextMode) return;
                 this.stopSequenceAnim();
+                this.stopRigPlayback();
                 this.sequence.view = 'sheet';
                 this.sequence.playing = true;
                 this.sequence.animIndex = 0;
@@ -2210,6 +2504,7 @@
                 this.activeIndex = 0;
                 this.result = { jobId: '', downloadUrl: '', items: [] };
                 this.step = 1;
+                this.resetRigState();
                 if (nextMode === 'video') {
                     this.videoStage = 'setup';
                     this.resetVideoState();
@@ -2219,6 +2514,9 @@
                     this.options.backgroundTolerance = 40;
                     this.options.backgroundEdgeBoost = 22;
                     this.options.alphaThreshold = 10;
+                } else if (nextMode === 'rig') {
+                    this.videoStage = 'setup';
+                    this.resetVideoState();
                 } else {
                     this.videoStage = 'setup';
                     this.resetVideoState();
@@ -2826,6 +3124,893 @@
                 const preset = encodeURIComponent(this.sequence.preset || 'original');
                 const url = `/api/images/jobs/${this.result.jobId}/sheet?cols=${cols}&gap=${gap}&preset=${preset}`;
                 window.open(url, '_blank');
+            },
+
+            getDefaultRigState() {
+                return {
+                    parts: [],
+                    activePartIndex: 0,
+                    bones: [],
+                    selectedBoneId: '',
+                    tool: 'bone',
+                    draftStart: null,
+                    view: { panX: 0, panY: 0, zoom: 1 },
+                    bindingBoneId: '',
+                    draggingPart: false,
+                    draggingBone: false,
+                    draggingBoneId: '',
+                    lastMouseX: 0,
+                    lastMouseY: 0,
+                    pose: {},
+                    poseAngleDeg: 0,
+                    currentFrame: 0,
+                    timelineFrames: 30,
+                    timelineFps: 12,
+                    playing: false,
+                    playStartTs: 0,
+                    playStartFrame: 0,
+                    keyframes: [],
+                    rafId: 0
+                };
+            },
+
+            resetRigState() {
+                this.stopRigPlayback();
+                const fresh = this.getDefaultRigState();
+                for (const key of Object.keys(fresh)) {
+                    this.rig[key] = fresh[key];
+                }
+            },
+
+            clearRigParts() {
+                this.stopRigPlayback();
+                this.rig.parts = [];
+                this.rig.activePartIndex = 0;
+                this.rig.bindingBoneId = '';
+                this.rig.draggingPart = false;
+                this.rig.pose = {};
+                this.rig.keyframes = [];
+                this.rig.currentFrame = 0;
+                this.rig.poseAngleDeg = 0;
+                this.renderRigAll();
+            },
+
+            activateRigPart(index) {
+                const safeIndex = Math.max(0, Math.min((this.rig.parts.length || 1) - 1, Number(index || 0)));
+                this.rig.activePartIndex = safeIndex;
+                this.onRigBindingTargetChange();
+                this.renderRigAll();
+            },
+
+            async handleRigFiles(event) {
+                const files = event && event.target ? event.target.files : null;
+                if (!files || files.length === 0) return;
+                await this.addRigPartsFromFiles(Array.from(files));
+                if (event && event.target) event.target.value = '';
+            },
+
+            async handleRigDrop(event) {
+                const dt = event && event.dataTransfer ? event.dataTransfer : null;
+                if (!dt || !dt.files || dt.files.length === 0) return;
+                await this.addRigPartsFromFiles(Array.from(dt.files));
+            },
+
+            async addRigPartsFromFiles(files) {
+                const imageFiles = (files || []).filter(f => f && f.type && f.type.startsWith('image/'));
+                if (imageFiles.length === 0) return;
+                for (let i = 0; i < imageFiles.length; i++) {
+                    const file = imageFiles[i];
+                    const src = await this.readFile(file);
+                    const image = await this.loadImage(src);
+                    this.rig.parts.push({
+                        id: `${Date.now()}-${i}`,
+                        name: file.name || `part_${this.rig.parts.length + 1}`,
+                        src,
+                        image,
+                        boneId: '',
+                        offsetX: 0,
+                        offsetY: 0,
+                        rotationDeg: 0
+                    });
+                }
+                if (!this.rig.parts[this.rig.activePartIndex]) {
+                    this.rig.activePartIndex = 0;
+                }
+                this.onRigBindingTargetChange();
+                this.$nextTick(() => {
+                    this.initRigCanvases();
+                    this.resetRigView(true);
+                    this.renderRigAll();
+                });
+            },
+
+            setRigTool(tool) {
+                this.rig.tool = tool === 'select' ? 'select' : 'bone';
+                this.rig.draftStart = null;
+                this.rig.draggingBone = false;
+                this.renderRigAll();
+            },
+
+            resetRigView(soft) {
+                const canvas = this.$refs.rigCanvas || this.$refs.rigBindCanvas || this.$refs.rigAnimCanvas || this.$refs.rigExportCanvas;
+                if (!canvas) return;
+                const rect = canvas.getBoundingClientRect();
+                const w = rect.width || 1;
+                const h = rect.height || 1;
+                if (!soft) {
+                    this.rig.view.zoom = 1;
+                }
+                this.rig.view.panX = Math.floor(w * 0.5);
+                this.rig.view.panY = Math.floor(h * 0.68);
+                this.renderRigAll();
+            },
+
+            selectRigBone(boneId) {
+                this.rig.selectedBoneId = boneId || '';
+                this.onRigSelectedBoneChange();
+                this.renderRigAll();
+            },
+
+            renameSelectedRigBone() {
+                const id = this.rig.selectedBoneId;
+                if (!id) return;
+                const bone = this.rig.bones.find(b => b.id === id);
+                if (!bone) return;
+                const next = window.prompt('请输入骨骼名称', bone.name || '');
+                if (next === null) return;
+                const name = String(next || '').trim();
+                if (!name) return;
+                bone.name = name;
+                for (const kf of this.rig.keyframes) {
+                    if (kf.boneId === id) kf.boneName = name;
+                }
+                this.renderRigAll();
+            },
+
+            setActivePartRotationDeg(value) {
+                const part = this.getActiveRigPart();
+                if (!part) return;
+                part.rotationDeg = Math.max(-180, Math.min(180, Math.floor(Number(value || 0))));
+                this.renderRigAll();
+            },
+
+            deleteSelectedRigBone() {
+                const id = this.rig.selectedBoneId;
+                if (!id) return;
+                const toDelete = new Set();
+                const stack = [id];
+                while (stack.length) {
+                    const cur = stack.pop();
+                    toDelete.add(cur);
+                    for (const b of this.rig.bones) {
+                        if (b.parentId === cur) stack.push(b.id);
+                    }
+                }
+                this.rig.bones = this.rig.bones.filter(b => !toDelete.has(b.id));
+                for (const part of this.rig.parts) {
+                    if (toDelete.has(part.boneId)) part.boneId = '';
+                }
+                this.rig.keyframes = this.rig.keyframes.filter(kf => !toDelete.has(kf.boneId));
+                this.rig.selectedBoneId = '';
+                this.rig.bindingBoneId = '';
+                this.rig.draftStart = null;
+                this.renderRigAll();
+            },
+
+            clearRigBones() {
+                this.rig.bones = [];
+                this.rig.selectedBoneId = '';
+                this.rig.bindingBoneId = '';
+                this.rig.keyframes = [];
+                this.rig.pose = {};
+                for (const part of this.rig.parts) part.boneId = '';
+                this.renderRigAll();
+            },
+
+            onRigBindingTargetChange() {
+                const part = this.getActiveRigPart();
+                this.rig.bindingBoneId = part ? (part.boneId || '') : '';
+                this.rig.draggingPart = false;
+                this.renderRigAll();
+            },
+
+            bindActivePartToBone() {
+                const part = this.getActiveRigPart();
+                if (!part) return;
+                part.boneId = this.rig.bindingBoneId || '';
+                this.rig.draggingPart = false;
+                this.renderRigAll();
+            },
+
+            toggleRigPartDrag() {
+                this.rig.draggingPart = !this.rig.draggingPart;
+            },
+
+            centerActivePartOnBone() {
+                const part = this.getActiveRigPart();
+                if (!part) return;
+                if (!part.boneId) return;
+                part.offsetX = 0;
+                part.offsetY = 0;
+                this.renderRigAll();
+            },
+
+            onRigSelectedBoneChange() {
+                if (!this.rig.selectedBoneId) return;
+                const angle = this.rig.pose[this.rig.selectedBoneId];
+                this.rig.poseAngleDeg = typeof angle === 'number' ? angle : 0;
+            },
+
+            applyRigPoseAngle() {
+                if (!this.rig.selectedBoneId) return;
+                this.rig.pose[this.rig.selectedBoneId] = Number(this.rig.poseAngleDeg || 0);
+                this.renderRigAll();
+            },
+
+            onRigFrameScrub() {
+                this.stopRigPlayback();
+                const frames = Math.max(1, Math.floor(this.rig.timelineFrames || 1));
+                this.rig.timelineFrames = frames;
+                const f = Math.max(0, Math.min(frames - 1, Math.floor(this.rig.currentFrame || 0)));
+                this.rig.currentFrame = f;
+                this.rig.pose = this.getRigPoseForFrame(f);
+                this.onRigSelectedBoneChange();
+                this.renderRigAll();
+            },
+
+            addRigKeyframe() {
+                const boneId = this.rig.selectedBoneId;
+                if (!boneId) return;
+                const frame = Math.max(0, Math.min(Math.max(1, Math.floor(this.rig.timelineFrames || 1)) - 1, Math.floor(this.rig.currentFrame || 0)));
+                const boneName = this.getRigBoneName(boneId);
+                const angleDeg = Number(this.rig.poseAngleDeg || 0);
+                const existingIndex = this.rig.keyframes.findIndex(kf => kf.boneId === boneId && kf.frame === frame);
+                const entry = { id: `${Date.now()}-${boneId}-${frame}`, boneId, boneName, frame, angleDeg };
+                if (existingIndex >= 0) {
+                    this.rig.keyframes.splice(existingIndex, 1, entry);
+                } else {
+                    this.rig.keyframes.push(entry);
+                }
+                this.rig.keyframes.sort((a, b) => (a.frame - b.frame) || String(a.boneId).localeCompare(String(b.boneId)));
+                this.renderRigAll();
+            },
+
+            removeRigKeyframe(index) {
+                const i = Number(index);
+                if (Number.isNaN(i) || i < 0 || i >= this.rig.keyframes.length) return;
+                this.rig.keyframes.splice(i, 1);
+                this.renderRigAll();
+            },
+
+            jumpToRigKeyframe(frame) {
+                this.stopRigPlayback();
+                const frames = Math.max(1, Math.floor(this.rig.timelineFrames || 1));
+                const f = Math.max(0, Math.min(frames - 1, Math.floor(frame || 0)));
+                this.rig.currentFrame = f;
+                this.onRigFrameScrub();
+            },
+
+            toggleRigPlayback() {
+                if (this.rig.playing) {
+                    this.stopRigPlayback();
+                    return;
+                }
+                const frames = Math.max(1, Math.floor(this.rig.timelineFrames || 1));
+                this.rig.timelineFrames = frames;
+                const fps = Math.max(1, Math.min(60, Math.floor(this.rig.timelineFps || 12)));
+                this.rig.timelineFps = fps;
+                this.rig.playing = true;
+                this.rig.playStartTs = performance.now();
+                this.rig.playStartFrame = Math.max(0, Math.min(frames - 1, Math.floor(this.rig.currentFrame || 0)));
+                this.rig.rafId = requestAnimationFrame((ts) => this.tickRigPlayback(ts));
+            },
+
+            restartRigPlayback() {
+                this.stopRigPlayback();
+                this.rig.currentFrame = 0;
+                this.onRigFrameScrub();
+                this.toggleRigPlayback();
+            },
+
+            stopRigPlayback() {
+                this.rig.playing = false;
+                if (this.rig.rafId) {
+                    try { cancelAnimationFrame(this.rig.rafId); } catch (e) {}
+                    this.rig.rafId = 0;
+                }
+            },
+
+            tickRigPlayback(ts) {
+                if (!this.rig.playing) return;
+                const frames = Math.max(1, Math.floor(this.rig.timelineFrames || 1));
+                const fps = Math.max(1, Math.min(60, Math.floor(this.rig.timelineFps || 12)));
+                const elapsed = Math.max(0, (ts - (this.rig.playStartTs || ts)) / 1000);
+                const frameFloat = (this.rig.playStartFrame + elapsed * fps) % frames;
+                const frame = Math.floor(frameFloat);
+                this.rig.currentFrame = frame;
+                this.rig.pose = this.getRigPoseForFrame(frameFloat);
+                this.onRigSelectedBoneChange();
+                this.renderRigAll();
+                this.rig.rafId = requestAnimationFrame((nextTs) => this.tickRigPlayback(nextTs));
+            },
+
+            getActiveRigPart() {
+                const idx = Math.max(0, Math.min((this.rig.parts.length || 1) - 1, Number(this.rig.activePartIndex || 0)));
+                return this.rig.parts[idx];
+            },
+
+            getRigBoneName(boneId) {
+                const bone = this.rig.bones.find(b => b.id === boneId);
+                return bone ? bone.name : '骨骼';
+            },
+
+            initRigCanvases() {
+                const refs = ['rigCanvas', 'rigBindCanvas', 'rigAnimCanvas', 'rigExportCanvas'];
+                for (const ref of refs) {
+                    const canvas = this.$refs[ref];
+                    if (!canvas) continue;
+                    this.ensureCanvasHiDpi(canvas);
+                    if (ref === 'rigCanvas') this.bindRigBoneCanvasEvents(canvas);
+                    if (ref === 'rigBindCanvas') this.bindRigBindingCanvasEvents(canvas);
+                    if (ref === 'rigAnimCanvas') this.bindRigAnimCanvasEvents(canvas);
+                }
+                if (!this.rig.view.panX && !this.rig.view.panY) {
+                    this.resetRigView(true);
+                }
+            },
+
+            ensureCanvasHiDpi(canvas) {
+                if (!canvas) return;
+                const rect = canvas.getBoundingClientRect();
+                const w = Math.max(1, Math.floor(rect.width));
+                const h = Math.max(1, Math.floor(rect.height));
+                const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+                const targetW = w * dpr;
+                const targetH = h * dpr;
+                if (canvas.width !== targetW || canvas.height !== targetH) {
+                    canvas.width = targetW;
+                    canvas.height = targetH;
+                }
+            },
+
+            bindRigBoneCanvasEvents(canvas) {
+                if (canvas._rigBound) return;
+                canvas._rigBound = true;
+                canvas.addEventListener('mousedown', (e) => this.onRigMouseDown(e, 'bones'));
+                window.addEventListener('mousemove', (e) => this.onRigMouseMove(e, 'bones'));
+                window.addEventListener('mouseup', (e) => this.onRigMouseUp(e, 'bones'));
+                canvas.addEventListener('wheel', (e) => this.onRigWheel(e), { passive: false });
+            },
+
+            bindRigBindingCanvasEvents(canvas) {
+                if (canvas._rigBound) return;
+                canvas._rigBound = true;
+                canvas.addEventListener('mousedown', (e) => this.onRigMouseDown(e, 'bind'));
+                window.addEventListener('mousemove', (e) => this.onRigMouseMove(e, 'bind'));
+                window.addEventListener('mouseup', (e) => this.onRigMouseUp(e, 'bind'));
+                canvas.addEventListener('wheel', (e) => this.onRigWheel(e), { passive: false });
+            },
+
+            bindRigAnimCanvasEvents(canvas) {
+                if (canvas._rigBound) return;
+                canvas._rigBound = true;
+                canvas.addEventListener('wheel', (e) => this.onRigWheel(e), { passive: false });
+            },
+
+            onRigWheel(event) {
+                if (!event) return;
+                event.preventDefault();
+                const delta = event.deltaY || 0;
+                const factor = delta > 0 ? 0.92 : 1.08;
+                const nextZoom = Math.max(0.2, Math.min(5, (this.rig.view.zoom || 1) * factor));
+                const canvas = event.currentTarget;
+                const p = this.getRigCanvasPoint(event, canvas);
+                const before = this.screenToWorld(p.x, p.y);
+                this.rig.view.zoom = nextZoom;
+                const after = this.screenToWorld(p.x, p.y);
+                this.rig.view.panX += Math.round((after.x - before.x) * this.rig.view.zoom);
+                this.rig.view.panY += Math.round((after.y - before.y) * this.rig.view.zoom);
+                this.renderRigAll();
+            },
+
+            onRigMouseDown(event, channel) {
+                if (this.mode !== 'rig') return;
+                const canvas = this.$refs[channel === 'bind' ? 'rigBindCanvas' : (channel === 'bones' ? 'rigCanvas' : 'rigAnimCanvas')];
+                if (!canvas) return;
+                const pt = this.getRigCanvasPoint(event, canvas);
+                const world = this.screenToWorld(pt.x, pt.y);
+                this.rig.lastMouseX = pt.x;
+                this.rig.lastMouseY = pt.y;
+                if (event.shiftKey) {
+                    this.rig.draggingBone = false;
+                    this.rig.draggingPart = false;
+                    this.rig._panning = true;
+                    return;
+                }
+                if (channel === 'bones') {
+                    if (this.rig.tool === 'bone') {
+                        this.handleRigBoneToolClick(world.x, world.y);
+                    } else {
+                        const hit = this.pickRigBone(world.x, world.y);
+                        if (hit) {
+                            this.selectRigBone(hit.id);
+                            this.rig.draggingBone = true;
+                            this.rig.draggingBoneId = hit.id;
+                        } else {
+                            this.rig.selectedBoneId = '';
+                        }
+                    }
+                }
+                if (channel === 'bind') {
+                    if (!this.rig.draggingPart) return;
+                    const part = this.getActiveRigPart();
+                    if (!part || !part.boneId) return;
+                    this.rig._partDragging = true;
+                    this.updateActivePartOffsetFromWorld(world.x, world.y);
+                }
+            },
+
+            onRigMouseMove(event, channel) {
+                if (this.mode !== 'rig') return;
+                if (!event) return;
+                const canvas = this.$refs[channel === 'bind' ? 'rigBindCanvas' : (channel === 'bones' ? 'rigCanvas' : 'rigAnimCanvas')];
+                if (!canvas) return;
+                const pt = this.getRigCanvasPoint(event, canvas);
+                if (this.rig._panning) {
+                    const deltaX = pt.x - (this.rig.lastMouseX || pt.x);
+                    const deltaY = pt.y - (this.rig.lastMouseY || pt.y);
+                    this.rig.view.panX += deltaX;
+                    this.rig.view.panY += deltaY;
+                    this.rig.lastMouseX = pt.x;
+                    this.rig.lastMouseY = pt.y;
+                    this.renderRigAll();
+                    return;
+                }
+                const world = this.screenToWorld(pt.x, pt.y);
+                if (channel === 'bones' && this.rig.draggingBone && this.rig.draggingBoneId) {
+                    this.moveRigBoneStart(this.rig.draggingBoneId, world.x, world.y);
+                    this.renderRigAll();
+                    return;
+                }
+                if (channel === 'bind' && this.rig._partDragging) {
+                    this.updateActivePartOffsetFromWorld(world.x, world.y);
+                    this.renderRigAll();
+                    return;
+                }
+            },
+
+            onRigMouseUp(event, channel) {
+                if (this.mode !== 'rig') return;
+                if (this.rig._panning) {
+                    this.rig._panning = false;
+                }
+                if (channel === 'bones') {
+                    this.rig.draggingBone = false;
+                    this.rig.draggingBoneId = '';
+                }
+                if (channel === 'bind') {
+                    this.rig._partDragging = false;
+                }
+            },
+
+            getRigCanvasPoint(event, canvas) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: (event.clientX - rect.left),
+                    y: (event.clientY - rect.top)
+                };
+            },
+
+            screenToWorld(sx, sy) {
+                const zoom = this.rig.view.zoom || 1;
+                return {
+                    x: (sx - (this.rig.view.panX || 0)) / zoom,
+                    y: (sy - (this.rig.view.panY || 0)) / zoom
+                };
+            },
+
+            worldToScreen(wx, wy) {
+                const zoom = this.rig.view.zoom || 1;
+                return {
+                    x: (this.rig.view.panX || 0) + wx * zoom,
+                    y: (this.rig.view.panY || 0) + wy * zoom
+                };
+            },
+
+            handleRigBoneToolClick(wx, wy) {
+                if (!this.rig.draftStart) {
+                    this.rig.draftStart = { x: wx, y: wy };
+                    this.renderRigAll();
+                    return;
+                }
+                const start = this.rig.draftStart;
+                const end = { x: wx, y: wy };
+                this.rig.draftStart = null;
+                const dx = end.x - start.x;
+                const dy = end.y - start.y;
+                const length = Math.sqrt(dx * dx + dy * dy);
+                if (!length || length < 2) {
+                    this.renderRigAll();
+                    return;
+                }
+                const angleWorld = Math.atan2(dy, dx);
+                const parentId = this.inferRigParentForNewBone(start.x, start.y);
+                const { parentRot, parentEnd } = this.getRigParentWorldInfo(parentId);
+                const restX = parentId ? 0 : start.x;
+                const restY = parentId ? 0 : start.y;
+                const restAngle = parentId ? this.normalizeRad(angleWorld - parentRot) : this.normalizeRad(angleWorld);
+                const bone = {
+                    id: `${Date.now()}-${this.rig.bones.length + 1}`,
+                    name: `骨骼${this.rig.bones.length + 1}`,
+                    parentId: parentId || '',
+                    restX,
+                    restY,
+                    restAngle,
+                    length: Math.round(length)
+                };
+                this.rig.bones.push(bone);
+                this.rig.selectedBoneId = bone.id;
+                this.renderRigAll();
+            },
+
+            inferRigParentForNewBone(startX, startY) {
+                if (!this.rig.selectedBoneId) return '';
+                const parentId = this.rig.selectedBoneId;
+                const info = this.computeRigWorld();
+                const parent = info.boneWorld[parentId];
+                if (!parent) return '';
+                const dist = Math.hypot(parent.end.x - startX, parent.end.y - startY);
+                return dist <= 20 ? parentId : '';
+            },
+
+            getRigParentWorldInfo(parentId) {
+                if (!parentId) return { parentRot: 0, parentEnd: { x: 0, y: 0 } };
+                const info = this.computeRigWorld();
+                const parent = info.boneWorld[parentId];
+                if (!parent) return { parentRot: 0, parentEnd: { x: 0, y: 0 } };
+                return { parentRot: parent.rot, parentEnd: parent.end };
+            },
+
+            pickRigBone(wx, wy) {
+                const info = this.computeRigWorld();
+                let best = null;
+                let bestDist = Infinity;
+                for (const bone of this.rig.bones) {
+                    const w = info.boneWorld[bone.id];
+                    if (!w) continue;
+                    const d = this.pointToSegmentDistance(wx, wy, w.start.x, w.start.y, w.end.x, w.end.y);
+                    if (d < bestDist) {
+                        bestDist = d;
+                        best = bone;
+                    }
+                }
+                if (bestDist <= 12 / (this.rig.view.zoom || 1)) return best;
+                return null;
+            },
+
+            moveRigBoneStart(boneId, wx, wy) {
+                const bone = this.rig.bones.find(b => b.id === boneId);
+                if (!bone) return;
+                if (!bone.parentId) {
+                    bone.restX = wx;
+                    bone.restY = wy;
+                    return;
+                }
+                const info = this.computeRigWorld();
+                const parent = info.boneWorld[bone.parentId];
+                if (!parent) return;
+                const dx = wx - parent.end.x;
+                const dy = wy - parent.end.y;
+                const cos = Math.cos(-parent.rot);
+                const sin = Math.sin(-parent.rot);
+                bone.restX = dx * cos - dy * sin;
+                bone.restY = dx * sin + dy * cos;
+            },
+
+            updateActivePartOffsetFromWorld(wx, wy) {
+                const part = this.getActiveRigPart();
+                if (!part || !part.boneId) return;
+                const info = this.computeRigWorld();
+                const boneW = info.boneWorld[part.boneId];
+                if (!boneW) return;
+                const dx = wx - boneW.start.x;
+                const dy = wy - boneW.start.y;
+                const cos = Math.cos(-boneW.rot);
+                const sin = Math.sin(-boneW.rot);
+                part.offsetX = dx * cos - dy * sin;
+                part.offsetY = dx * sin + dy * cos;
+                this.rig.bindingBoneId = part.boneId;
+            },
+
+            computeRigWorld(framePoseOverride) {
+                const pose = framePoseOverride || this.rig.pose || {};
+                const boneMap = {};
+                for (const b of this.rig.bones) boneMap[b.id] = b;
+                const boneWorld = {};
+                const childrenMap = {};
+                for (const b of this.rig.bones) {
+                    const pid = b.parentId || '';
+                    if (!childrenMap[pid]) childrenMap[pid] = [];
+                    childrenMap[pid].push(b.id);
+                }
+                const roots = childrenMap[''] || [];
+                const walk = (id, parent) => {
+                    const b = boneMap[id];
+                    if (!b) return;
+                    const parentRot = parent ? parent.rot : 0;
+                    const parentEnd = parent ? parent.end : { x: 0, y: 0 };
+                    const localAngle = Number(b.restAngle || 0) + this.degToRad(Number(pose[id] || 0));
+                    const rot = parentRot + localAngle;
+                    const start = b.parentId ? this.addVec(parentEnd, this.rotateVec({ x: Number(b.restX || 0), y: Number(b.restY || 0) }, parentRot)) : { x: Number(b.restX || 0), y: Number(b.restY || 0) };
+                    const end = this.addVec(start, this.rotateVec({ x: Number(b.length || 0), y: 0 }, rot));
+                    boneWorld[id] = { start, end, rot };
+                    const kids = childrenMap[id] || [];
+                    for (const kid of kids) walk(kid, boneWorld[id]);
+                };
+                for (const rootId of roots) walk(rootId, null);
+                return { boneWorld, boneMap };
+            },
+
+            renderRigAll() {
+                if (this.mode !== 'rig') return;
+                this.renderRigCanvas(this.$refs.rigCanvas, { showReferencePart: true, showParts: false, showDraft: true });
+                this.renderRigCanvas(this.$refs.rigBindCanvas, { showReferencePart: false, showParts: true, showDraft: false });
+                this.renderRigCanvas(this.$refs.rigAnimCanvas, { showReferencePart: false, showParts: true, showDraft: false });
+                this.renderRigCanvas(this.$refs.rigExportCanvas, { showReferencePart: false, showParts: true, showDraft: false });
+            },
+
+            renderRigCanvas(canvas, opts) {
+                if (!canvas) return;
+                this.ensureCanvasHiDpi(canvas);
+                const ctx = canvas.getContext('2d');
+                const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+                const w = Math.floor(canvas.width / dpr);
+                const h = Math.floor(canvas.height / dpr);
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                ctx.clearRect(0, 0, w, h);
+                ctx.fillStyle = '#0b1020';
+                ctx.fillRect(0, 0, w, h);
+                ctx.save();
+                ctx.translate(this.rig.view.panX || 0, this.rig.view.panY || 0);
+                ctx.scale(this.rig.view.zoom || 1, this.rig.view.zoom || 1);
+                if (opts && opts.showReferencePart) {
+                    const part = this.getActiveRigPart();
+                    if (part && part.image) {
+                        ctx.globalAlpha = 0.85;
+                        ctx.drawImage(part.image, -part.image.naturalWidth / 2, -part.image.naturalHeight / 2);
+                        ctx.globalAlpha = 1;
+                    }
+                }
+                const info = this.computeRigWorld();
+                if (opts && opts.showParts) {
+                    for (const part of this.rig.parts) {
+                        if (!part || !part.image || !part.boneId) continue;
+                        const bw = info.boneWorld[part.boneId];
+                        if (!bw) continue;
+                        const pos = this.addVec(bw.start, this.rotateVec({ x: Number(part.offsetX || 0), y: Number(part.offsetY || 0) }, bw.rot));
+                        const rot = bw.rot + this.degToRad(Number(part.rotationDeg || 0));
+                        ctx.save();
+                        ctx.translate(pos.x, pos.y);
+                        ctx.rotate(rot);
+                        ctx.drawImage(part.image, -part.image.naturalWidth / 2, -part.image.naturalHeight / 2);
+                        ctx.restore();
+                    }
+                }
+                for (const bone of this.rig.bones) {
+                    const bw = info.boneWorld[bone.id];
+                    if (!bw) continue;
+                    ctx.lineCap = 'round';
+                    ctx.lineWidth = 3 / (this.rig.view.zoom || 1);
+                    ctx.strokeStyle = (this.rig.selectedBoneId === bone.id) ? '#22c55e' : '#93c5fd';
+                    ctx.beginPath();
+                    ctx.moveTo(bw.start.x, bw.start.y);
+                    ctx.lineTo(bw.end.x, bw.end.y);
+                    ctx.stroke();
+                    ctx.fillStyle = '#e2e8f0';
+                    ctx.beginPath();
+                    ctx.arc(bw.start.x, bw.start.y, 5 / (this.rig.view.zoom || 1), 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.beginPath();
+                    ctx.arc(bw.end.x, bw.end.y, 4 / (this.rig.view.zoom || 1), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                if (opts && opts.showDraft && this.rig.draftStart) {
+                    ctx.strokeStyle = '#f97316';
+                    ctx.lineWidth = 2 / (this.rig.view.zoom || 1);
+                    ctx.beginPath();
+                    ctx.arc(this.rig.draftStart.x, this.rig.draftStart.y, 6 / (this.rig.view.zoom || 1), 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            },
+
+            getRigPoseForFrame(frameFloat) {
+                const frame = Number(frameFloat || 0);
+                const frames = Math.max(1, Math.floor(this.rig.timelineFrames || 1));
+                const keyframes = this.rig.keyframes || [];
+                const pose = {};
+                for (const bone of this.rig.bones) {
+                    const list = keyframes.filter(kf => kf.boneId === bone.id).sort((a, b) => a.frame - b.frame);
+                    if (list.length === 0) continue;
+                    if (list.length === 1) {
+                        pose[bone.id] = Number(list[0].angleDeg || 0);
+                        continue;
+                    }
+                    const t = ((frame % frames) + frames) % frames;
+                    let prev = null;
+                    let next = null;
+                    for (let i = 0; i < list.length; i++) {
+                        if (list[i].frame <= t) prev = list[i];
+                        if (list[i].frame >= t) { next = list[i]; break; }
+                    }
+                    if (!prev) prev = list[list.length - 1];
+                    if (!next) next = list[0];
+                    if (prev.frame === next.frame) {
+                        pose[bone.id] = Number(next.angleDeg || 0);
+                        continue;
+                    }
+                    const span = (next.frame > prev.frame) ? (next.frame - prev.frame) : (frames - prev.frame + next.frame);
+                    const offset = (t >= prev.frame) ? (t - prev.frame) : (frames - prev.frame + t);
+                    const alpha = span ? (offset / span) : 0;
+                    const a0 = Number(prev.angleDeg || 0);
+                    const a1 = Number(next.angleDeg || 0);
+                    pose[bone.id] = a0 + (a1 - a0) * alpha;
+                }
+                return pose;
+            },
+
+            buildRigProjectJson() {
+                return {
+                    version: 1,
+                    timeline: { frames: Math.max(1, Math.floor(this.rig.timelineFrames || 1)), fps: Math.max(1, Math.floor(this.rig.timelineFps || 12)) },
+                    view: { panX: this.rig.view.panX || 0, panY: this.rig.view.panY || 0, zoom: this.rig.view.zoom || 1 },
+                    bones: (this.rig.bones || []).map(b => ({
+                        id: b.id,
+                        name: b.name,
+                        parentId: b.parentId || '',
+                        restX: Number(b.restX || 0),
+                        restY: Number(b.restY || 0),
+                        restAngle: Number(b.restAngle || 0),
+                        length: Number(b.length || 0)
+                    })),
+                    parts: (this.rig.parts || []).map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        src: p.src,
+                        boneId: p.boneId || '',
+                        offsetX: Number(p.offsetX || 0),
+                        offsetY: Number(p.offsetY || 0),
+                        rotationDeg: Number(p.rotationDeg || 0)
+                    })),
+                    keyframes: (this.rig.keyframes || []).map(kf => ({
+                        boneId: kf.boneId,
+                        frame: Number(kf.frame || 0),
+                        angleDeg: Number(kf.angleDeg || 0)
+                    }))
+                };
+            },
+
+            downloadRigProject() {
+                const payload = this.buildRigProjectJson();
+                const text = JSON.stringify(payload, null, 2);
+                const blob = new Blob([text], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'rig_project.json';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => {
+                    try { URL.revokeObjectURL(url); } catch (e) {}
+                }, 1000);
+            },
+
+            async importRigProject(event) {
+                const file = event && event.target && event.target.files ? event.target.files[0] : null;
+                if (!file) return;
+                const text = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result || '');
+                    reader.onerror = reject;
+                    reader.readAsText(file);
+                });
+                if (event && event.target) event.target.value = '';
+                let data = null;
+                try {
+                    data = JSON.parse(String(text || ''));
+                } catch (e) {
+                    alert('工程 JSON 解析失败');
+                    return;
+                }
+                if (!data || !Array.isArray(data.parts) || !Array.isArray(data.bones)) {
+                    alert('工程格式不正确');
+                    return;
+                }
+                this.stopRigPlayback();
+                this.rig.bones = data.bones.map((b, idx) => ({
+                    id: b.id || `${Date.now()}-${idx}`,
+                    name: b.name || `骨骼${idx + 1}`,
+                    parentId: b.parentId || '',
+                    restX: Number(b.restX || 0),
+                    restY: Number(b.restY || 0),
+                    restAngle: Number(b.restAngle || 0),
+                    length: Number(b.length || 0)
+                }));
+                this.rig.parts = [];
+                for (let i = 0; i < data.parts.length; i++) {
+                    const p = data.parts[i];
+                    if (!p || !p.src) continue;
+                    const img = await this.loadImage(p.src);
+                    this.rig.parts.push({
+                        id: p.id || `${Date.now()}-p${i}`,
+                        name: p.name || `part_${i + 1}`,
+                        src: p.src,
+                        image: img,
+                        boneId: p.boneId || '',
+                        offsetX: Number(p.offsetX || 0),
+                        offsetY: Number(p.offsetY || 0),
+                        rotationDeg: Number(p.rotationDeg || 0)
+                    });
+                }
+                this.rig.keyframes = Array.isArray(data.keyframes) ? data.keyframes.map((k, idx) => ({
+                    id: `${Date.now()}-kf${idx}`,
+                    boneId: k.boneId || '',
+                    boneName: this.getRigBoneName(k.boneId || ''),
+                    frame: Number(k.frame || 0),
+                    angleDeg: Number(k.angleDeg || 0)
+                })) : [];
+                this.rig.timelineFrames = data.timeline && data.timeline.frames ? Math.max(1, Math.floor(data.timeline.frames)) : this.rig.timelineFrames;
+                this.rig.timelineFps = data.timeline && data.timeline.fps ? Math.max(1, Math.floor(data.timeline.fps)) : this.rig.timelineFps;
+                if (data.view) {
+                    this.rig.view.panX = Number(data.view.panX || 0);
+                    this.rig.view.panY = Number(data.view.panY || 0);
+                    this.rig.view.zoom = Number(data.view.zoom || 1);
+                }
+                this.rig.activePartIndex = 0;
+                this.onRigBindingTargetChange();
+                this.$nextTick(() => {
+                    this.initRigCanvases();
+                    if (!this.rig.view.panX && !this.rig.view.panY) this.resetRigView(true);
+                    this.renderRigAll();
+                });
+            },
+
+            degToRad(deg) {
+                return (Number(deg || 0) * Math.PI) / 180;
+            },
+
+            normalizeRad(rad) {
+                let r = Number(rad || 0);
+                while (r > Math.PI) r -= Math.PI * 2;
+                while (r < -Math.PI) r += Math.PI * 2;
+                return r;
+            },
+
+            rotateVec(v, rad) {
+                const c = Math.cos(rad);
+                const s = Math.sin(rad);
+                return { x: v.x * c - v.y * s, y: v.x * s + v.y * c };
+            },
+
+            addVec(a, b) {
+                return { x: a.x + b.x, y: a.y + b.y };
+            },
+
+            pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+                const vx = x2 - x1;
+                const vy = y2 - y1;
+                const wx = px - x1;
+                const wy = py - y1;
+                const c1 = vx * wx + vy * wy;
+                if (c1 <= 0) return Math.hypot(px - x1, py - y1);
+                const c2 = vx * vx + vy * vy;
+                if (c2 <= c1) return Math.hypot(px - x2, py - y2);
+                const t = c2 ? (c1 / c2) : 0;
+                const bx = x1 + t * vx;
+                const by = y1 + t * vy;
+                return Math.hypot(px - bx, py - by);
             },
 
             formatTime(seconds) {
