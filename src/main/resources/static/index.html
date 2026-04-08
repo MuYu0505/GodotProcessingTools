@@ -1396,7 +1396,7 @@
                             <input type="checkbox" v-model="activeItem.localOptions.resizeEnabled" @change="onResizeToggle" style="width: 18px; height: 18px;">
                             启用自动调整像素功能
                         </label>
-                        <span style="color: var(--text-muted); font-size: 14px;">(不开启=不调整尺寸导出；仍可先手动设置尺寸)</span>
+                        <span style="color: var(--text-muted); font-size: 14px;">(手动输入宽高会优先生效；点“原图尺寸”可恢复不缩放)</span>
                     </div>
                 </div>
 
@@ -1410,9 +1410,9 @@
                             <span>32×32</span>
                             <span class="preset-desc">像素小图标</span>
                         </button>
-                        <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 64 && activeItem.localOptions.targetHeight === 64 }" @click="applyPreset(64, 64)">
-                            <span>64×64</span>
-                            <span class="preset-desc">中等精灵</span>
+                        <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 64 && activeItem.localOptions.targetHeight === 128 }" @click="applyPreset(64, 128)">
+                            <span>64×128</span>
+                            <span class="preset-desc">人物</span>
                         </button>
                         <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 128 && activeItem.localOptions.targetHeight === 128 }" @click="applyPreset(128, 128)">
                             <span>128×128</span>
@@ -1422,9 +1422,9 @@
                             <span>256×256</span>
                             <span class="preset-desc">高分辨率像素</span>
                         </button>
-                        <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 380 && activeItem.localOptions.targetHeight === 380 }" @click="applyPreset(380, 380)">
-                            <span>380×380</span>
-                            <span class="preset-desc">高清主角</span>
+                        <button class="preset-btn" :class="{ active: activeItem.localOptions.resizeEnabled && activeItem.localOptions.targetWidth === 640 && activeItem.localOptions.targetHeight === 380 }" @click="applyPreset(640, 380)">
+                            <span>640×380</span>
+                            <span class="preset-desc">场景</span>
                         </button>
                     </div>
 
@@ -1815,12 +1815,27 @@
                     removeBackground: false,
                     resizeEnabled: false,
                     targetWidth: 380,
-                    targetHeight: 243
+                    targetHeight: 243,
+                    manualResizePreferred: false
+                };
+            },
+            resolveResizeOptions(local) {
+                const targetWidth = Math.max(1, Math.floor(Number(local.targetWidth || 0)));
+                const targetHeight = Math.max(1, Math.floor(Number(local.targetHeight || 0)));
+                const manualResizePreferred = !!local.manualResizePreferred;
+                const resizeEnabled = !!local.resizeEnabled || manualResizePreferred;
+                const sanitized = { ...local };
+                delete sanitized.manualResizePreferred;
+                return {
+                    ...sanitized,
+                    targetWidth,
+                    targetHeight,
+                    resizeEnabled
                 };
             },
             buildOptionsForItem(item) {
                 const local = item && item.localOptions ? item.localOptions : this.createDefaultLocalOptions();
-                return { ...this.options, ...local };
+                return { ...this.options, ...this.resolveResizeOptions(local) };
             },
             async onWatermarkToggle() {
                 if (this.step < 3 || !this.activeItem) return;
@@ -1925,12 +1940,14 @@
                 if (w === null && h === null) {
                     if (!this.activeItem || !this.activeItem.localOptions) return;
                     this.activeItem.localOptions.resizeEnabled = false;
+                    this.activeItem.localOptions.manualResizePreferred = false;
                 } else {
                     this.keepAspectRatio = false;
                     if (!this.activeItem || !this.activeItem.localOptions) return;
                     this.activeItem.localOptions.targetWidth = w;
                     this.activeItem.localOptions.targetHeight = h;
                     this.activeItem.localOptions.resizeEnabled = true;
+                    this.activeItem.localOptions.manualResizePreferred = true;
                 }
             },
             toggleKeepAspect() {
@@ -1941,12 +1958,14 @@
             },
             onWidthChange() {
                 if (!this.activeItem || !this.activeItem.localOptions) return;
+                this.activeItem.localOptions.manualResizePreferred = true;
                 if (this.keepAspectRatio && this.activeItem.localOptions.targetWidth) {
                     this.activeItem.localOptions.targetHeight = Math.max(1, Math.round(this.activeItem.localOptions.targetWidth / this.cropAspectRatio));
                 }
             },
             onHeightChange() {
                 if (!this.activeItem || !this.activeItem.localOptions) return;
+                this.activeItem.localOptions.manualResizePreferred = true;
                 if (this.keepAspectRatio && this.activeItem.localOptions.targetHeight) {
                     this.activeItem.localOptions.targetWidth = Math.max(1, Math.round(this.activeItem.localOptions.targetHeight * this.cropAspectRatio));
                 }
